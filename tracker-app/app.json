@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "tracker-app",
+    "slug": "tracker-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "trackerapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "firebaseApiKey": "AIzaSyBv3KBIP-T6Bhx_7dO0sfOGb9woqdpxp2Q",
+      "firebaseAuthDomain": "sidhealthcareapp.firebaseapp.com",
+      "firebaseProjectId": "sidhealthcareapp",
+      "firebaseStorageBucket": "sidhealthcareapp.firebasestorage.app",
+      "firebaseMessagingSenderId": "506606835618",
+      "firebaseAppId": "1:506606835618:web:d35690e459e8e7fbc6c4fb",
+      "firebaseDatabaseUrl": "https://sidhealthcareapp-default-rtdb.firebaseio.com",
+      "firebaseMeasurementId": "G-K8RFJ5LZ5Y"
+    }
+  }
+}
