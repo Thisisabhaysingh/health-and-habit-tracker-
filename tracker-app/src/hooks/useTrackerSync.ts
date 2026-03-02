@@ -5,6 +5,7 @@ import {
   subscribeToExerciseTasks,
   subscribeToMeals,
   subscribeToScreenSessions,
+  subscribeToStudents,
 } from '@/firebase/trackerApi';
 import { useAppDispatch, useAppSelector } from './redux';
 import {
@@ -12,6 +13,7 @@ import {
   setExerciseTasks,
   setMeals,
   setScreenSessions,
+  setStudents,
 } from '@/store/trackerSlice';
 import { setProfile } from '@/store/authSlice';
 import type { UserProfile } from '@/types/tracker';
@@ -31,6 +33,7 @@ export const useTrackerSync = () => {
     let unsubTasks: (() => void) | undefined;
     let unsubSessions: (() => void) | undefined;
     let unsubProfile: (() => void) | undefined;
+    let unsubStudents: (() => void) | undefined;
     let cancelled = false;
 
     const bootstrap = async () => {
@@ -44,6 +47,9 @@ export const useTrackerSync = () => {
             dispatch(setProfile(profile));
           }
         });
+
+        // Subscribe to students data
+        unsubStudents = subscribeToStudents(userId, (students) => dispatch(setStudents(students)));
 
         unsubMeals = subscribeToMeals(userId, (meals) => dispatch(setMeals(meals)));
         unsubTasks = subscribeToExerciseTasks(userId, (tasks) => dispatch(setExerciseTasks(tasks)));
@@ -63,6 +69,7 @@ export const useTrackerSync = () => {
       unsubTasks?.();
       unsubSessions?.();
       unsubProfile?.();
+      unsubStudents?.();
     };
   }, [userId, dispatch]);
 };

@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Alert, Animated, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Card,
@@ -14,6 +14,7 @@ import {
 
 import { useAppSelector, useAppDispatch } from '@/hooks/redux';
 import { calculateRecommendedCalories } from '@/utils/bmi';
+import type { Student } from '@/types/tracker';
 import { 
   HOME_EXERCISES, 
   GYM_EXERCISES, 
@@ -127,9 +128,15 @@ export default function DashboardScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { profile } = useAppSelector((state) => state.auth);
-  const { meals, exerciseTasks, screenSessions, currentMealPlan, currentExercisePlan, students } = useAppSelector((state) => state.tracker);
+  const { meals, exerciseTasks, screenSessions, currentMealPlan, currentExercisePlan, students, mealPlans } = useAppSelector((state) => state.tracker);
 
   const heroAnim = useRef(new Animated.Value(0)).current;
+  
+  // State for student meal details modal
+  const [selectedStudentForMeals, setSelectedStudentForMeals] = useState<Student | null>(null);
+  const [showMealModal, setShowMealModal] = useState(false);
+  const [expandedStudents, setExpandedStudents] = useState<Set<string>>(new Set());
+  const [expandedExerciseStudents, setExpandedExerciseStudents] = useState<Set<string>>(new Set());
 
   const todayLabel = useMemo(
     () =>
@@ -305,7 +312,172 @@ export default function DashboardScreen() {
     };
   }, [currentMealPlan]);
 
-  // Alert when screen time exceeds limit
+  // Calculate student meal data for timeline - handle multiple children
+  const studentMealData = useMemo(() => {
+    if (!mealPlans.length || !students.length) {
+      return [];
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const allStudentMeals: any[] = [];
+
+    mealPlans.forEach(mealPlan => {
+      const studentWithPlan = students.find(s => s.id === mealPlan.studentId);
+      
+      if (!studentWithPlan) return;
+
+      const todayMeals = mealPlan.meals[today];
+      if (!todayMeals) return;
+
+      // Create meal data for each meal type for this student
+      const mealTypes = [
+        { type: 'breakfast', name: '🌅 Breakfast', emoji: '🌅' },
+        { type: 'lunch', name: '☀️ Lunch', emoji: '☀️' },
+        { type: 'dinner', name: '🌆 Dinner', emoji: '🌆' },
+        { type: 'snack', name: '🍎 Snack', emoji: '🍎' }
+      ];
+
+      mealTypes.forEach(mealType => {
+        const mealKey = mealType.type as 'breakfast' | 'lunch' | 'dinner' | 'snack';
+        const mealData = todayMeals[mealKey];
+        
+        allStudentMeals.push({
+          studentId: studentWithPlan.id,
+          studentName: studentWithPlan.name,
+          studentAge: studentWithPlan.age,
+          studentBMI: studentWithPlan.bmi,
+          mealType: mealType.type,
+          mealName: mealType.name,
+          mealEmoji: mealType.emoji,
+          foodName: mealData.name,
+          calories: mealData.calories,
+          grams: mealData.grams,
+          consumed: todayMeals.consumed[mealKey],
+          loggedAt: new Date().toISOString(),
+          mealPlanId: mealPlan.id
+        });
+      });
+    });
+
+    return allStudentMeals;
+  }, [mealPlans, students]);
+
+  // Get weekly meal data for selected student
+  const getStudentWeeklyMeals = (studentId: string) => {
+    const studentMealPlan = mealPlans.find(plan => plan.studentId === studentId);
+    if (!studentMealPlan) return [];
+
+    const weeklyMeals: any[] = [];
+    const today = new Date();
+    
+    // Generate next 7 days
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      const dateStr = date.toISOString().split('T')[0];
+      const dayName = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      
+      const dayMeals = studentMealPlan.meals[dateStr];
+      if (dayMeals) {
+        const mealTypes = [
+          { type: 'breakfast', name: '🌅 Breakfast', emoji: '🌅' },
+          { type: 'lunch', name: '☀️ Lunch', emoji: '☀️' },
+          { type: 'dinner', name: '🌆 Dinner', emoji: '🌆' },
+          { type: 'snack', name: '🍎 Snack', emoji: '🍎' }
+        ];
+
+        mealTypes.forEach(mealType => {
+          const mealKey = mealType.type as 'breakfast' | 'lunch' | 'dinner' | 'snack';
+          const mealData = dayMeals[mealKey];
+          
+          weeklyMeals.push({
+            date: dateStr,
+            dayName,
+            mealType: mealType.type,
+            mealName: mealType.name,
+            mealEmoji: mealType.emoji,
+            foodName: mealData.name,
+            calories: mealData.calories,
+            grams: mealData.grams,
+            consumed: dayMeals.consumed[mealKey]
+          });
+        });
+      }
+    }
+
+    return weeklyMeals;
+  };
+
+  // Handle student click to show meal details
+  const handleStudentClick = (studentId: string) => {
+    const student = students.find(s => s.id === studentId);
+    if (student) {
+      setSelectedStudentForMeals(student);
+      setShowMealModal(true);
+    }
+  };
+
+  // Toggle student section expansion
+  const toggleStudentExpansion = (studentId: string) => {
+    setExpandedStudents(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(studentId)) {
+        newSet.delete(studentId);
+      } else {
+        newSet.add(studentId);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle exercise section expansion
+  const toggleExerciseExpansion = (studentId: string) => {
+    setExpandedExerciseStudents(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(studentId)) {
+        newSet.delete(studentId);
+      } else {
+        newSet.add(studentId);
+      }
+      return newSet;
+    });
+  };
+
+  // Calculate meal completion statistics for hero card
+  const mealCompletionStats = useMemo(() => {
+    if (!students.length) {
+      return { completedAll: 0, totalStudents: 0, percentage: 0 };
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    let completedAllCount = 0;
+
+    students.forEach(student => {
+      const studentMealPlan = mealPlans.find(plan => plan.studentId === student.id);
+      if (!studentMealPlan) return; // Student doesn't have meal plan, can't be counted as completed
+
+      const todayMeals = studentMealPlan.meals[today];
+      if (todayMeals) {
+        const allMealsCompleted = todayMeals.consumed.breakfast && 
+                                todayMeals.consumed.lunch && 
+                                todayMeals.consumed.dinner && 
+                                todayMeals.consumed.snack;
+        
+        if (allMealsCompleted) {
+          completedAllCount++;
+        }
+      }
+    });
+
+    const totalStudents = students.length;
+    const percentage = totalStudents > 0 ? (completedAllCount / totalStudents) * 100 : 0;
+
+    return {
+      completedAll: completedAllCount,
+      totalStudents: totalStudents,
+      percentage: Math.round(percentage)
+    };
+  }, [mealPlans, students]);
   useEffect(() => {
     if (screenUsage > screenLimit) {
       Alert.alert(
@@ -370,16 +542,16 @@ export default function DashboardScreen() {
               <View style={styles.heroMetaRow}>
                 <View style={[styles.heroMetaCard, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
                   <Text style={[styles.heroMetaLabel, { color: 'rgba(255,255,255,0.8)' }]}>
-                    Today's energy
+                    Today's Meals
                   </Text>
                   <Text style={[styles.heroMetaValue, { color: 'white' }]}>
-                    {caloriesConsumed}/{calorieTarget} kcal
+                    {mealCompletionStats.completedAll}/{mealCompletionStats.totalStudents} Done
                   </Text>
                   <View style={styles.heroProgressTrack}>
                     <View
                       style={[
                         styles.heroProgressFill,
-                        { width: `${calorieProgress * 100}%`, backgroundColor: palette.accentLime },
+                        { width: `${mealCompletionStats.percentage}%`, backgroundColor: palette.accentLime },
                       ]}
                     />
                   </View>
@@ -405,18 +577,18 @@ export default function DashboardScreen() {
         <View style={styles.metricRow}>
           <Card style={styles.metricCard}>
             <Card.Title
-              title="Calories"
+              title="Diet Complete"
               subtitle="Today"
-              left={CardIcon('fire', palette.accentWarm)}
+              left={CardIcon('food-apple', palette.accentLime)}
               titleStyle={[styles.metricTitle, { color: palette.textPrimary }]}
               subtitleStyle={[styles.cardSubtitle, { color: palette.textMuted }]}
             />
             <Card.Content>
-              <Text style={[styles.metricValue, { color: palette.textPrimary }]}>{caloriesConsumed} kcal</Text>
-              <Text style={[styles.metricCaption, { color: palette.textMuted }]}>Goal {calorieTarget} kcal</Text>
+              <Text style={[styles.metricValue, { color: palette.textPrimary }]}>{mealCompletionStats.completedAll}/{mealCompletionStats.totalStudents}</Text>
+              <Text style={[styles.metricCaption, { color: palette.textMuted }]}>Children completed all meals</Text>
               <ProgressBar
-                progress={calorieProgress}
-                color={palette.accentWarm}
+                progress={mealCompletionStats.percentage / 100}
+                color={palette.accentLime}
                 style={styles.progress}
               />
             </Card.Content>
@@ -443,30 +615,91 @@ export default function DashboardScreen() {
 
         <Card style={styles.sectionCard}>
           <Card.Title
-            title="Meals timeline"
-            subtitle="Latest check-ins"
+            title="Student Meals"
+            subtitle="Daily nutrition tracking"
             titleStyle={[styles.cardTitle, { color: palette.textPrimary }]}
             subtitleStyle={[styles.cardSubtitle, { color: palette.textMuted }]}
           />
           <Card.Content>
-            {meals.slice(0, 3).map((meal) => (
-              <View key={meal.id} style={styles.timelineRow}>
-                <View style={[styles.timelineBullet, { backgroundColor: palette.bullet }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.timelineTitle, { color: palette.textPrimary }]}>{meal.foodName}</Text>
-                  <Text style={[styles.timelineSubtitle, { color: palette.textMuted }]}>
-                    {meal.calories} kcal ·{' '}
-                    {new Date(meal.loggedAt).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </Text>
+            {studentMealData.length > 0 ? (
+              // Group meals by student
+              Object.values(
+                studentMealData.reduce((acc: any, meal) => {
+                  if (!acc[meal.studentId]) {
+                    acc[meal.studentId] = {
+                      studentId: meal.studentId,
+                      studentName: meal.studentName,
+                      studentAge: meal.studentAge,
+                      studentBMI: meal.studentBMI,
+                      meals: []
+                    };
+                  }
+                  acc[meal.studentId].meals.push(meal);
+                  return acc;
+                }, {})
+              ).map((studentData: any) => {
+                const isExpanded = expandedStudents.has(studentData.studentId);
+                return (
+                <View key={studentData.studentId} style={styles.studentMealSection}>
+                  <TouchableOpacity
+                    style={styles.studentHeader}
+                    onPress={() => toggleStudentExpansion(studentData.studentId)}>
+                    <View style={styles.studentHeaderContent}>
+                      <View style={styles.studentInfoRow}>
+                        <Text style={[styles.studentName, { color: palette.textPrimary }]}>
+                          👤 {studentData.studentName}
+                        </Text>
+                        <MaterialCommunityIcons 
+                          name={isExpanded ? "chevron-up" : "chevron-down"} 
+                          size={20} 
+                          color={palette.textMuted} 
+                        />
+                      </View>
+                      <Text style={[styles.studentDetails, { color: palette.textMuted }]}>
+                        Age: {studentData.studentAge} • BMI: {studentData.studentBMI.toFixed(1)}
+                      </Text>
+                      <Text style={[styles.viewDetailsText, { color: palette.accentWarm }]}>
+                        {isExpanded ? "Hide meals" : "View all meals"} {isExpanded ? "↑" : "↓"}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  
+                  {isExpanded && (
+                    <View style={styles.mealsList}>
+                      {studentData.meals.map((meal: any, index: number) => (
+                        <View key={`${meal.studentId}-${meal.mealType}`} style={styles.timelineRow}>
+                          <View style={[styles.timelineBullet, { backgroundColor: meal.consumed ? palette.accentLime : palette.bullet }]} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.timelineTitle, { color: palette.textPrimary }]}>
+                              {meal.mealEmoji} {meal.mealName}
+                            </Text>
+                            <Text style={[styles.timelineSubtitle, { color: palette.textMuted }]}>
+                              {meal.foodName} · {meal.calories} kcal · {meal.grams}g
+                            </Text>
+                            <Text style={[styles.timelineStatus, { color: meal.consumed ? palette.accentLime : palette.textMuted }]}>
+                              {meal.consumed ? '✅ Consumed' : '⏳ Pending'}
+                            </Text>
+                          </View>
+                          <Chip 
+                            compact 
+                            style={{ backgroundColor: palette.pillBg }}
+                            textStyle={{ fontSize: 11 }}>
+                            {meal.mealType}
+                          </Chip>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
-                <Chip compact style={{ backgroundColor: palette.pillBg }}>
-                  {meal.portion} {meal.unit}
-                </Chip>
+                );
+              })
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={[styles.emptyStateText, { color: palette.textMuted }]}>
+                  No meal plans generated yet. Generate a meal plan from the Meals tab to see student nutrition data.
+                </Text>
               </View>
-            ))}
+            )}
           </Card.Content>
         </Card>
 
@@ -479,127 +712,139 @@ export default function DashboardScreen() {
           />
           <Card.Content>
             {studentsWithPlans.length > 0 ? (
-              <>
-                <View style={styles.exerciseSummary}>
-                  <View style={styles.stat}>
-                    <Text style={[styles.metricValue, { color: palette.textPrimary }]}>
-                      {completedExercisePlans}/{totalExercisePlans}
-                    </Text>
-                    <Text style={[styles.metricCaption, { color: palette.textMuted }]}>exercises completed</Text>
+              studentsWithPlans.map((student: Student) => {
+                const isExpanded = expandedExerciseStudents.has(student.id);
+                const today = new Date().toISOString().split('T')[0];
+                const todayExercises = currentExercisePlan?.exercises[today];
+                
+                return (
+                  <View key={student.id} style={styles.studentMealSection}>
+                    <TouchableOpacity
+                      style={styles.studentHeader}
+                      onPress={() => toggleExerciseExpansion(student.id)}>
+                      <View style={styles.studentHeaderContent}>
+                        <View style={styles.studentInfoRow}>
+                          <Text style={[styles.studentName, { color: palette.textPrimary }]}>
+                            🏃 {student.name}
+                          </Text>
+                          <MaterialCommunityIcons 
+                            name={isExpanded ? "chevron-up" : "chevron-down"} 
+                            size={20} 
+                            color={palette.textMuted} 
+                          />
+                        </View>
+                        <Text style={[styles.studentDetails, { color: palette.textMuted }]}>
+                          Age: {student.age} • BMI: {student.bmi.toFixed(1)}
+                        </Text>
+                        <View style={styles.exerciseSummary}>
+                          <Text style={[styles.viewDetailsText, { color: palette.accentWarm }]}>
+                            {isExpanded ? "Hide exercises" : "View all exercises"} {isExpanded ? "↑" : "↓"}
+                          </Text>
+                          <Text style={[styles.timelineStatus, { color: palette.textMuted }]}>
+                            {completedExercisePlans}/{totalExercisePlans} completed ({exercisePlanProgress}%)
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                    
+                    {isExpanded && todayExercises && (
+                      <View style={styles.mealsList}>
+                        <View style={styles.exerciseSummary}>
+                          <View style={styles.stat}>
+                            <Text style={[styles.metricValue, { color: palette.textPrimary }]}>
+                              {completedExercisePlans}/{totalExercisePlans}
+                            </Text>
+                            <Text style={[styles.metricCaption, { color: palette.textMuted }]}>exercises completed</Text>
+                          </View>
+                          <View style={styles.stat}>
+                            <Text style={[styles.metricValue, { color: palette.textPrimary }]}>
+                              {exercisePlanProgress}%
+                            </Text>
+                            <Text style={[styles.metricCaption, { color: palette.textMuted }]}>daily progress</Text>
+                          </View>
+                        </View>
+                        <Divider style={styles.divider} />
+                        <ProgressBar
+                          progress={exercisePlanProgress / 100}
+                          color={palette.accentWarm}
+                          style={styles.progress}
+                        />
+                        
+                        {/* Individual Exercise Items */}
+                        <View style={styles.exerciseItemsList}>
+                          <View style={styles.timelineRow}>
+                            <View style={[styles.timelineBullet, { backgroundColor: todayExercises.completed.mobility ? palette.accentLime : palette.bullet }]} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.timelineTitle, { color: palette.textPrimary }]}>
+                                🤸 Mobility
+                              </Text>
+                              <Text style={[styles.timelineSubtitle, { color: palette.textMuted }]}>
+                                {todayExercises.mobility.name} · {todayExercises.mobility.duration} min · {todayExercises.mobility.calories} kcal
+                              </Text>
+                              <Text style={[styles.timelineStatus, { color: todayExercises.completed.mobility ? palette.accentLime : palette.textMuted }]}>
+                                {todayExercises.completed.mobility ? '✅ Completed' : '⏳ Pending'}
+                              </Text>
+                            </View>
+                            <Chip 
+                              compact 
+                              style={{ backgroundColor: palette.pillBg }}
+                              textStyle={{ fontSize: 11 }}>
+                              {todayExercises.mobility.difficulty}
+                            </Chip>
+                          </View>
+                          
+                          <View style={styles.timelineRow}>
+                            <View style={[styles.timelineBullet, { backgroundColor: todayExercises.completed.strength ? palette.accentLime : palette.bullet }]} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.timelineTitle, { color: palette.textPrimary }]}>
+                                💪 Strength
+                              </Text>
+                              <Text style={[styles.timelineSubtitle, { color: palette.textMuted }]}>
+                                {todayExercises.strength.name} · {todayExercises.strength.duration} min · {todayExercises.strength.calories} kcal
+                              </Text>
+                              <Text style={[styles.timelineStatus, { color: todayExercises.completed.strength ? palette.accentLime : palette.textMuted }]}>
+                                {todayExercises.completed.strength ? '✅ Completed' : '⏳ Pending'}
+                              </Text>
+                            </View>
+                            <Chip 
+                              compact 
+                              style={{ backgroundColor: palette.pillBg }}
+                              textStyle={{ fontSize: 11 }}>
+                              {todayExercises.strength.difficulty}
+                            </Chip>
+                          </View>
+                          
+                          <View style={styles.timelineRow}>
+                            <View style={[styles.timelineBullet, { backgroundColor: todayExercises.completed.cardio ? palette.accentLime : palette.bullet }]} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.timelineTitle, { color: palette.textPrimary }]}>
+                                🏃 Cardio
+                              </Text>
+                              <Text style={[styles.timelineSubtitle, { color: palette.textMuted }]}>
+                                {todayExercises.cardio.name} · {todayExercises.cardio.duration} min · {todayExercises.cardio.calories} kcal
+                              </Text>
+                              <Text style={[styles.timelineStatus, { color: todayExercises.completed.cardio ? palette.accentLime : palette.textMuted }]}>
+                                {todayExercises.completed.cardio ? '✅ Completed' : '⏳ Pending'}
+                              </Text>
+                            </View>
+                            <Chip 
+                              compact 
+                              style={{ backgroundColor: palette.pillBg }}
+                              textStyle={{ fontSize: 11 }}>
+                              {todayExercises.cardio.difficulty}
+                            </Chip>
+                          </View>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                  <View style={styles.stat}>
-                    <Text style={[styles.metricValue, { color: palette.textPrimary }]}>
-                      {exercisePlanProgress}%
-                    </Text>
-                    <Text style={[styles.metricCaption, { color: palette.textMuted }]}>daily progress</Text>
-                  </View>
-                </View>
-                <Divider style={styles.divider} />
-                <ProgressBar
-                  progress={exercisePlanProgress / 100}
-                  color={palette.accentWarm}
-                  style={styles.progress}
-                />
-                <View style={styles.chipRow}>
-                  <Chip
-                    icon={currentExercisePlan?.exercises[new Date().toISOString().split('T')[0]]?.completed.mobility ? 'check' : 'clock-outline'}
-                    mode={currentExercisePlan?.exercises[new Date().toISOString().split('T')[0]]?.completed.mobility ? 'flat' : 'outlined'}
-                    style={[styles.taskChip, { backgroundColor: palette.pillBg }]}
-                    selectedColor={palette.textPrimary}>
-                    Mobility
-                  </Chip>
-                  <Chip
-                    icon={currentExercisePlan?.exercises[new Date().toISOString().split('T')[0]]?.completed.strength ? 'check' : 'clock-outline'}
-                    mode={currentExercisePlan?.exercises[new Date().toISOString().split('T')[0]]?.completed.strength ? 'flat' : 'outlined'}
-                    style={[styles.taskChip, { backgroundColor: palette.pillBg }]}
-                    selectedColor={palette.textPrimary}>
-                    Strength
-                  </Chip>
-                  <Chip
-                    icon={currentExercisePlan?.exercises[new Date().toISOString().split('T')[0]]?.completed.cardio ? 'check' : 'clock-outline'}
-                    mode={currentExercisePlan?.exercises[new Date().toISOString().split('T')[0]]?.completed.cardio ? 'flat' : 'outlined'}
-                    style={[styles.taskChip, { backgroundColor: palette.pillBg }]}
-                    selectedColor={palette.textPrimary}>
-                    Cardio
-                  </Chip>
-                </View>
-                <View style={styles.studentInfo}>
-                  <Text style={[styles.studentName, { color: palette.textPrimary }]}>
-                    {studentsWithPlans[0]?.name}
-                  </Text>
-                  <Text style={[styles.studentDetails, { color: palette.textMuted }]}>
-                    Age: {studentsWithPlans[0]?.age} • BMI: {studentsWithPlans[0]?.bmi.toFixed(1)}
-                  </Text>
-                </View>
-              </>
+                );
+              })
             ) : (
               <View style={styles.emptyState}>
                 <Text style={[styles.emptyStateText, { color: palette.textMuted }]}>
                   No exercise plans generated yet. Select a student and generate a plan from the Exercise tab.
                 </Text>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
-
-        <Card style={styles.sectionCard}>
-          <Card.Title
-            title="Meal plan"
-            subtitle="Daily nutrition goals"
-            titleStyle={[styles.cardTitle, { color: palette.textPrimary }]}
-            subtitleStyle={[styles.cardSubtitle, { color: palette.textMuted }]}
-          />
-          <Card.Content>
-            <View style={styles.exerciseSummary}>
-              <View style={styles.stat}>
-                <Text style={[styles.metricValue, { color: palette.textPrimary }]}>
-                  {completedMealPlans}/{totalMealPlans}
-                </Text>
-                <Text style={[styles.metricCaption, { color: palette.textMuted }]}>meals completed</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={[styles.metricValue, { color: palette.textPrimary }]}>
-                  {mealPlanProgress}%
-                </Text>
-                <Text style={[styles.metricCaption, { color: palette.textMuted }]}>daily progress</Text>
-              </View>
-            </View>
-            <Divider style={styles.divider} />
-            <ProgressBar
-              progress={mealPlanProgress / 100}
-              color={palette.accentLime}
-              style={styles.progress}
-            />
-            {currentMealPlan && (
-              <View style={styles.chipRow}>
-                <Chip
-                  icon={currentMealPlan.meals[new Date().toISOString().split('T')[0]]?.consumed.breakfast ? 'check' : 'clock-outline'}
-                  mode={currentMealPlan.meals[new Date().toISOString().split('T')[0]]?.consumed.breakfast ? 'flat' : 'outlined'}
-                  style={[styles.taskChip, { backgroundColor: palette.pillBg }]}
-                  selectedColor={palette.textPrimary}>
-                  Breakfast
-                </Chip>
-                <Chip
-                  icon={currentMealPlan.meals[new Date().toISOString().split('T')[0]]?.consumed.lunch ? 'check' : 'clock-outline'}
-                  mode={currentMealPlan.meals[new Date().toISOString().split('T')[0]]?.consumed.lunch ? 'flat' : 'outlined'}
-                  style={[styles.taskChip, { backgroundColor: palette.pillBg }]}
-                  selectedColor={palette.textPrimary}>
-                  Lunch
-                </Chip>
-                <Chip
-                  icon={currentMealPlan.meals[new Date().toISOString().split('T')[0]]?.consumed.dinner ? 'check' : 'clock-outline'}
-                  mode={currentMealPlan.meals[new Date().toISOString().split('T')[0]]?.consumed.dinner ? 'flat' : 'outlined'}
-                  style={[styles.taskChip, { backgroundColor: palette.pillBg }]}
-                  selectedColor={palette.textPrimary}>
-                  Dinner
-                </Chip>
-                <Chip
-                  icon={currentMealPlan.meals[new Date().toISOString().split('T')[0]]?.consumed.snack ? 'check' : 'clock-outline'}
-                  mode={currentMealPlan.meals[new Date().toISOString().split('T')[0]]?.consumed.snack ? 'flat' : 'outlined'}
-                  style={[styles.taskChip, { backgroundColor: palette.pillBg }]}
-                  selectedColor={palette.textPrimary}>
-                  Snack
-                </Chip>
               </View>
             )}
           </Card.Content>
@@ -857,15 +1102,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.02)',
     borderRadius: 8,
   },
-  studentName: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: fonts.semibold,
-  },
-  studentDetails: {
-    fontSize: 12,
-    fontFamily: fonts.regular,
-    marginTop: 2,
+  timelineStatus: {
+    fontSize: 11,
+    fontFamily: fonts.medium,
+    marginTop: 4,
   },
   emptyState: {
     padding: 20,
@@ -876,6 +1116,54 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  studentName: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+  },
+  studentDetails: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    marginTop: 2,
+  },
+  studentMealSection: {
+    marginBottom: 20,
+    backgroundColor: 'rgba(0,0,0,0.02)',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  studentHeader: {
+    padding: 16,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  studentHeaderContent: {
+    flex: 1,
+  },
+  studentInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  mealsList: {
+    padding: 12,
+  },
+  exerciseItemsList: {
+    marginTop: 12,
+  },
+  viewDetailsText: {
+    fontSize: 13,
+    fontFamily: fonts.medium,
+    marginTop: 4,
+  },
+  moreMealsText: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    fontStyle: 'italic',
+    marginTop: 8,
+    textAlign: 'center',
   },
   screenRow: {
     flexDirection: 'row',

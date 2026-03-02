@@ -6,6 +6,7 @@ import { useTrackerSync } from '@/hooks/useTrackerSync';
 
 const tabConfig = [
   { name: 'dashboard', label: 'Dashboard', icon: 'view-dashboard', color: '#8b5cf6' },
+  { name: 'children', label: 'Children', icon: 'home', color: '#f59e0b' },
   { name: 'meals/index', label: 'Meals', icon: 'food-apple', color: '#10b981' },
   { name: 'exercise/index', label: 'Exercise', icon: 'dumbbell', color: '#ef4444' },
   { name: 'screen-time/index', label: 'Screen Time', icon: 'monitor', color: '#3b82f6' },

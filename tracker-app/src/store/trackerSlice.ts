@@ -9,6 +9,7 @@ const initialState: TrackerState = {
   students: [],
   currentMealPlan: null,
   currentExercisePlan: null,
+  mealPlans: [], // Array to store meal plans for multiple children
 };
 
 const trackerSlice = createSlice({
@@ -91,7 +92,7 @@ const trackerSlice = createSlice({
       state.students = state.students.filter((student) => student.id !== action.payload);
     },
     // Meal Plan reducers
-    setCurrentMealPlan(state, action: PayloadAction<MealPlan | null>) {
+    setCurrentMealPlan: (state, action: PayloadAction<MealPlan | null>) => {
       state.currentMealPlan = action.payload;
     },
     updateMealPlan(state, action: PayloadAction<MealPlan>) {
@@ -103,6 +104,20 @@ const trackerSlice = createSlice({
       if (state.currentMealPlan && state.currentMealPlan.meals[action.payload.date]) {
         state.currentMealPlan.meals[action.payload.date].consumed[action.payload.mealType] = true;
       }
+      // Also update in mealPlans array
+      const planIndex = state.mealPlans.findIndex(plan => plan.id === state.currentMealPlan?.id);
+      if (planIndex !== -1 && state.mealPlans[planIndex].meals[action.payload.date]) {
+        state.mealPlans[planIndex].meals[action.payload.date].consumed[action.payload.mealType] = true;
+      }
+    },
+    setMealPlans(state, action: PayloadAction<MealPlan[]>) {
+      state.mealPlans = action.payload;
+    },
+    addMealPlan: (state, action: PayloadAction<MealPlan>) => {
+      // Remove existing plan for same student if exists
+      state.mealPlans = state.mealPlans.filter(plan => plan.studentId !== action.payload.studentId);
+      // Add new plan
+      state.mealPlans.push(action.payload);
     },
     // Exercise Plan reducers
     setCurrentExercisePlan(state, action: PayloadAction<ExercisePlan | null>) {
@@ -142,6 +157,8 @@ export const {
   setCurrentMealPlan,
   updateMealPlan,
   updateMealConsumption,
+  setMealPlans,
+  addMealPlan,
   setCurrentExercisePlan,
   updateExercisePlan,
   updateExerciseConsumption,

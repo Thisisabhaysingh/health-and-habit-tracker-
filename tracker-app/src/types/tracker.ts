@@ -122,6 +122,7 @@ export interface TrackerState {
   students: Student[];
   currentMealPlan: MealPlan | null;
   currentExercisePlan: ExercisePlan | null;
+  mealPlans: MealPlan[]; // Array to store meal plans for multiple children
 }
 
 export interface AuthUser {

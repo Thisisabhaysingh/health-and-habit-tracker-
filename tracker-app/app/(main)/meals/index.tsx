@@ -11,6 +11,11 @@ import {
   updateMealConsumption as updateMealConsumptionFirebase,
   subscribeToCurrentMealPlan
 } from '@/src/firebase/trackerApi';
+import { 
+  setCurrentMealPlan,
+  addMealPlan,
+  updateMealConsumption
+} from '@/src/store/trackerSlice';
 import type { PortionUnit, Student, MealPlan, MealWithGrams } from '@/types/tracker';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import { INDIAN_MEAL_LIBRARY, REGIONS, getMealsByRegionAndCategory, getBMISuggestedMeals, type MealLibraryItem } from '@/constants/mealLibrary';
@@ -184,7 +189,27 @@ export default function MealsScreen() {
         createdAt: newMealPlan.createdAt
       };
 
-      await createMealPlan(user.uid, mealPlanPayload);
+      const createdPlanId = await createMealPlan(user.uid, mealPlanPayload);
+      
+      // Update Redux state with the new meal plan
+      if (createdPlanId) {
+        const completeMealPlan: MealPlan = {
+          id: createdPlanId,
+          ...mealPlanPayload
+        };
+        
+        try {
+          // Use manual action creation to bypass Redux Toolkit issue
+          const currentMealPlanAction = { type: 'tracker/setCurrentMealPlan', payload: completeMealPlan };
+          const addMealPlanAction = { type: 'tracker/addMealPlan', payload: completeMealPlan };
+          
+          dispatch(currentMealPlanAction);
+          dispatch(addMealPlanAction);
+        } catch (dispatchError) {
+          console.error('Redux dispatch error:', dispatchError);
+        }
+      }
+      
       setError(`✅ 7-day meal plan generated for ${selectedStudent.name}!`);
       setTimeout(() => setError(null), 3000);
     } catch (error) {
@@ -204,6 +229,28 @@ export default function MealsScreen() {
 
     try {
       await updateMealConsumptionFirebase(user.uid, currentMealPlan.id, date, mealType);
+      
+      // Update Redux state to reflect the meal completion
+      try {
+        // Use manual action creation to bypass Redux Toolkit issue
+        const updateMealConsumptionAction = { 
+          type: 'tracker/updateMealConsumption', 
+          payload: { date, mealType } 
+        };
+        
+        dispatch(updateMealConsumptionAction);
+        
+        // Also update the mealPlans array
+        const mealPlansAction = { 
+          type: 'tracker/updateMealPlan', 
+          payload: currentMealPlan 
+        };
+        dispatch(mealPlansAction);
+        
+      } catch (dispatchError) {
+        console.error('Redux dispatch error:', dispatchError);
+      }
+      
       setError(`✅ ${mealType.charAt(0).toUpperCase() + mealType.slice(1)} marked as completed!`);
       setTimeout(() => setError(null), 2000);
     } catch (error) {

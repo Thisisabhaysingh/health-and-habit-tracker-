@@ -494,7 +494,24 @@ export default function ExerciseScreen() {
 
 
 
-      await createExercisePlan(user.uid, exercisePlanPayload);
+      const createdPlanId = await createExercisePlan(user.uid, exercisePlanPayload);
+      
+      // Update Redux state with the new exercise plan
+      if (createdPlanId) {
+        const completeExercisePlan: ExercisePlan = {
+          id: createdPlanId,
+          ...exercisePlanPayload
+        };
+        
+        try {
+          // Use manual action creation to bypass Redux Toolkit issue
+          const currentExercisePlanAction = { type: 'tracker/setCurrentExercisePlan', payload: completeExercisePlan };
+          
+          dispatch(currentExercisePlanAction);
+        } catch (dispatchError) {
+          console.error('Redux dispatch error:', dispatchError);
+        }
+      }
 
       setError(`✅ 7-day exercise plan generated for ${selectedStudent.name}!`);
 
