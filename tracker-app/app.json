@@ -1,33 +1,35 @@
 {
   "expo": {
-    "name": "tracker-app",
-    "slug": "tracker-app",
+    "name": "Athlead",
+    "slug": "athlead-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "trackerapp",
+    "icon": "./assets/images/logo.png",
+    "scheme": "athlead",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#3b82f6"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.athlead"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#3b82f6"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.athlead"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/logo.png"
     },
     "plugins": [
       "expo-router"
@@ -43,7 +45,11 @@
       "firebaseMessagingSenderId": "506606835618",
       "firebaseAppId": "1:506606835618:web:d35690e459e8e7fbc6c4fb",
       "firebaseDatabaseUrl": "https://sidhealthcareapp-default-rtdb.firebaseio.com",
-      "firebaseMeasurementId": "G-K8RFJ5LZ5Y"
+      "firebaseMeasurementId": "G-K8RFJ5LZ5Y",
+      "router": {},
+      "eas": {
+        "projectId": "636f9969-2a06-4b83-b263-54162feb0f46"
+      }
     }
   }
 }

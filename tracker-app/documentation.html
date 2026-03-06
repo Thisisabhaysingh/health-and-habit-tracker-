@@ -1,0 +1,1249 @@
+    <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Athlead - Health & Habit Tracker Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            /* Material Design Color Palette */
+            --primary: #1976d2;
+            --primary-dark: #115293;
+            --primary-light: #e3f2fd;
+            --secondary: #424242;
+            --surface: #ffffff;
+            --background: #fafafa;
+            --text-primary: #212121;
+            --text-secondary: #757575;
+            --text-tertiary: #9e9e9e;
+            --border: #e0e0e0;
+            --divider: #e0e0e0;
+            --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+            --shadow-2: 0 3px 6px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.12);
+            --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.12);
+            
+            /* Semantic Colors */
+            --success: #4caf50;
+            --warning: #ff9800;
+            --error: #f44336;
+            --info: #2196f3;
+        }
+        
+        body {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.5;
+            color: var(--text-primary);
+            background: var(--background);
+            margin: 0;
+            padding: 0;
+            font-size: 14px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        
+        header {
+            text-align: left;
+            padding: 32px 40px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--divider);
+            margin-left: 280px;
+            margin-right: 24px;
+        }
+        
+        header h1 {
+            font-size: 2rem;
+            font-weight: 400;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+            letter-spacing: 0;
+        }
+        
+        header p {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+            margin: 0;
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            margin: 4px 4px 0 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .badge-primary {
+            background: var(--primary-light);
+            color: var(--primary);
+        }
+        
+        .badge-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .badge-warning {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+        
+        .main-content {
+            display: flex;
+            flex: 1;
+            gap: 24px;
+            align-items: flex-start;
+        }
+        
+        .content-area {
+            flex: 1;
+            min-width: 0;
+            margin-left: 280px;
+            margin-right: 24px;
+        }
+        
+        .sidebar {
+            width: 256px;
+            flex-shrink: 0;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            background: var(--surface);
+            border-right: 1px solid var(--divider);
+        }
+        
+        .sidebar-card {
+            background: var(--surface);
+            padding: 24px 16px;
+            height: 100%;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+        
+        .sidebar-card::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .sidebar-card::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .sidebar-card::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+        
+        .sidebar-card h3 {
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding-left: 16px;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 0;
+            margin-bottom: 0;
+            font-weight: 400;
+            font-size: 14px;
+            gap: 12px;
+            border-left: 3px solid transparent;
+            transition: none;
+        }
+        
+        .nav-item:hover {
+            background: var(--primary-light);
+            color: var(--primary);
+            transform: none;
+        }
+        
+        .nav-item.active {
+            background: var(--primary-light);
+            color: var(--primary);
+            border-left-color: var(--primary);
+        }
+        
+        .quick-links {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--divider);
+        }
+        
+        .quick-links h4 {
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding-left: 16px;
+        }
+        
+        .quick-links a {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            color: var(--primary);
+            text-decoration: none;
+            font-size: 14px;
+            margin: 2px 0;
+            border-left: 3px solid transparent;
+        }
+        
+        .quick-links a:hover {
+            background: var(--primary-light);
+            border-left-color: var(--primary);
+            transform: none;
+        }
+        
+        .progress-indicator {
+            width: calc(100% - 32px);
+            height: 2px;
+            background: var(--divider);
+            margin: 16px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: var(--primary);
+            width: 15%;
+            transition: width 0.3s ease;
+        }
+        
+        .card {
+            background: var(--surface);
+            border-radius: 4px;
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow-1);
+            border: none;
+        }
+        
+        .card:hover {
+            box-shadow: var(--shadow-2);
+        }
+        
+        .card h2 {
+            color: var(--text-primary);
+            font-size: 1.5rem;
+            font-weight: 400;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--divider);
+        }
+        
+        .card h3 {
+            color: var(--text-primary);
+            font-size: 1.25rem;
+            font-weight: 500;
+            margin: 32px 0 16px 0;
+        }
+        
+        .card h4 {
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-weight: 500;
+            margin: 20px 0 12px 0;
+        }
+        
+        .tech-stack {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 24px;
+        }
+        
+        .tech-item {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 4px;
+            border: 1px solid var(--divider);
+        }
+        
+        .tech-item:hover {
+            box-shadow: var(--shadow-2);
+        }
+        
+        .tech-item h4 {
+            color: var(--primary);
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+        
+        .feature-card {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 4px;
+            border: 1px solid var(--divider);
+        }
+        
+        .feature-card:hover {
+            box-shadow: var(--shadow-2);
+        }
+        
+        .feature-card h4 {
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+        
+        .feature-card ul {
+            margin-left: 0;
+            color: var(--text-secondary);
+            list-style: none;
+        }
+        
+        .feature-card li {
+            margin-bottom: 8px;
+            padding-left: 16px;
+            position: relative;
+            font-size: 14px;
+        }
+        
+        .feature-card li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 8px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--primary);
+        }
+        
+        .screenshots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+        
+        .screen-card {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 4px;
+            text-align: left;
+            border: 1px solid var(--divider);
+        }
+        
+        .screen-card h4 {
+            color: var(--text-primary);
+            font-weight: 500;
+            margin-bottom: 12px;
+            font-size: 1rem;
+        }
+        
+        .usage-steps {
+            counter-reset: step;
+            list-style: none;
+        }
+        
+        .usage-steps li {
+            position: relative;
+            padding-left: 48px;
+            margin-bottom: 24px;
+            min-height: 32px;
+        }
+        
+        .usage-steps li::before {
+            counter-increment: step;
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 32px;
+            height: 32px;
+            background: var(--surface);
+            color: var(--primary);
+            border: 2px solid var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .code-block {
+            background: #263238;
+            color: #eeffff;
+            padding: 16px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'Roboto Mono', 'SF Mono', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            border: none;
+        }
+        
+        .firebase-structure {
+            background: #263238;
+            color: #c3e88d;
+            padding: 16px;
+            border-radius: 4px;
+            font-family: 'Roboto Mono', 'SF Mono', 'Monaco', monospace;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+            border: none;
+        }
+        
+        .firebase-structure .key {
+            color: #ffcb6b;
+        }
+        
+        .firebase-structure .string {
+            color: #c3e88d;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            background: var(--surface);
+            font-size: 14px;
+        }
+        
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--divider);
+        }
+        
+        th {
+            background: var(--surface);
+            color: var(--text-primary);
+            font-weight: 500;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--divider);
+        }
+        
+        tr:hover {
+            background: var(--background);
+        }
+        
+        .highlight {
+            background: var(--primary-light);
+            padding: 16px;
+            border-radius: 4px;
+            margin: 16px 0;
+            border-left: 4px solid var(--primary);
+        }
+        
+        .highlight h4 {
+            color: var(--text-primary);
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+        
+        footer {
+            text-align: left;
+            padding: 24px 40px;
+            background: var(--surface);
+            border-top: 1px solid var(--divider);
+            color: var(--text-secondary);
+            margin-left: 280px;
+            margin-right: 24px;
+            font-size: 14px;
+        }
+        
+        footer p {
+            margin: 4px 0;
+        }
+        
+        @media (max-width: 1024px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                position: static;
+            }
+            
+            .sidebar-card {
+                position: static;
+                width: 100%;
+                height: auto;
+                overflow-y: visible;
+            }
+            
+            .content-area {
+                margin-left: 0;
+            }
+            
+            header {
+                margin-left: 0;
+            }
+            
+            .tech-stack,
+            .feature-grid,
+            .screenshots {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+                gap: 20px;
+            }
+            
+            header {
+                padding: 24px 20px;
+            }
+            
+            header h1 {
+                font-size: 2rem;
+            }
+            
+            .card {
+                padding: 20px;
+                margin-bottom: 16px;
+            }
+            
+            .sidebar-card {
+                padding: 20px;
+            }
+            
+            .tech-stack,
+            .feature-grid,
+            .screenshots {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏃‍♂️ Athlead</h1>
+            <p>Comprehensive Health & Habit Tracker for Shelter Homes</p>
+            <span class="badge badge-primary">React Native</span>
+            <span class="badge badge-success">Expo SDK 54</span>
+            <span class="badge badge-warning">Firebase</span>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <div class="sidebar-card">
+                    <h3>📋 Quick Navigation</h3>
+                    <a href="#overview" class="nav-item active">📱 App Overview</a>
+                    <a href="#tech-stack" class="nav-item">🛠️ Technology Stack</a>
+                    <a href="#features" class="nav-item">✨ Core Features</a>
+                    <a href="#screens" class="nav-item">🗂️ App Screens</a>
+                    <a href="#meals" class="nav-item">🍽️ Meal Plans</a>
+                    <a href="#exercise" class="nav-item">🏋️ Exercise Program</a>
+                    <a href="#database" class="nav-item">🔥 Database Structure</a>
+                    <a href="#usage" class="nav-item">📖 How to Use</a>
+                    <a href="#files" class="nav-item">📋 File Structure</a>
+                    <a href="#build" class="nav-item">🚀 Build Instructions</a>
+                    <a href="#config" class="nav-item">🔧 Configuration</a>
+                    <a href="#support" class="nav-item">📞 Support</a>
+                    
+                    <div class="progress-indicator">
+                        <div class="progress-bar" style="width: 15%;"></div>
+                    </div>
+                    
+                    <div class="quick-links">
+                        <h4>🚀 Quick Links</h4>
+                        <a href="#build">Build APK</a>
+                        <a href="#usage">User Guide</a>
+                        <a href="#support">Get Help</a>
+                        <a href="#features">Features</a>
+                    </div>
+                </div>
+            </aside>
+            
+            <main class="content-area">
+
+        <div id="overview" class="card">
+            <h2>📱 App Overview</h2>
+                <p>Athlead is a comprehensive health and habit tracking application designed specifically for <strong>Shelter Home Nutrition & Fitness Programs</strong>. The app enables caregivers to track children's meal consumption, exercise routines, and health metrics with age-appropriate portion guidelines and structured weekly meal plans.</p>
+                
+                <div class="highlight">
+                    <h4>🎯 Target Audience</h4>
+                    <ul>
+                        <li>Shelter Home Administrators</li>
+                        <li>Caregivers & Nutrition Staff</li>
+                        <li>Health Coordinators</li>
+                        <li>Children (8-16 years) - monitored usage</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="tech-stack" class="card">
+            <h2>🛠️ Technology Stack</h2>
+                <div class="tech-stack">
+                    <div class="tech-item">
+                        <h4>📱 Frontend Framework</h4>
+                        <p><strong>React Native 0.81.5</strong> with <strong>Expo SDK 54.0.30</strong></p>
+                        <p>Cross-platform mobile development for iOS & Android</p>
+                    </div>
+                    <div class="tech-item">
+                        <h4>📊 State Management</h4>
+                        <p><strong>Redux Toolkit 2.11.2</strong></p>
+                        <p>Centralized state management with persistent storage</p>
+                    </div>
+                    <div class="tech-item">
+                        <h4>🔥 Backend & Database</h4>
+                        <p><strong>Firebase Realtime Database</strong></p>
+                        <p>Real-time data sync, authentication, and cloud storage</p>
+                    </div>
+                    <div class="tech-item">
+                        <h4>🎨 UI Components</h4>
+                        <p><strong>React Native Paper 5.14.5</strong></p>
+                        <p>Material Design components for consistent UI</p>
+                    </div>
+                    <div class="tech-item">
+                        <h4>📐 Navigation</h4>
+                        <p><strong>Expo Router 6.0.21</strong></p>
+                        <p>File-based routing with deep linking support</p>
+                    </div>
+                    <div class="tech-item">
+                        <h4>📈 Charts & PDF</h4>
+                        <p><strong>React Native Chart Kit + Expo Print</strong></p>
+                        <p>Data visualization and PDF report generation</p>
+                    </div>
+                </div>
+
+                <h3>Development Dependencies</h3>
+                <ul>
+                    <li><strong>TypeScript 5.9.2</strong> - Type-safe development</li>
+                    <li><strong>Expo CLI</strong> - Build and development tools</li>
+                    <li><strong>Android SDK 36</strong> - Android build tools</li>
+                    <li><strong>Gradle 8.14.3</strong> - Build automation</li>
+                </ul>
+            </div>
+
+            <div id="features" class="card">
+            <h2>✨ Core Features</h2>
+                
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>🔐 Authentication</h4>
+                        <ul>
+                            <li>Email/Password Sign Up & Login</li>
+                            <li>Secure Firebase Authentication</li>
+                            <li>Profile-based user management</li>
+                            <li>Password reset functionality</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4>🍽️ Shelter Home Meal Plans</h4>
+                        <ul>
+                            <li>7-day structured weekly menu</li>
+                            <li>Age-wise portion guidelines (8-10, 11-13, 14-16 years)</li>
+                            <li>Breakfast, Lunch, Snack, Dinner tracking</li>
+                            <li>Dish combinations with nutritional info</li>
+                            <li>Iron, Calcium, Energy-dense markers</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4>🏋️ Exercise Tracking</h4>
+                        <ul>
+                            <li>Structured fitness programs</li>
+                            <li>Daily exercise routines</li>
+                            <li>Calorie burn calculation</li>
+                            <li>Exercise completion tracking</li>
+                            <li>Duration and intensity logging</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4>📊 Dashboard & Analytics</h4>
+                        <ul>
+                            <li>Real-time health metrics overview</li>
+                            <li>Meal completion statistics</li>
+                            <li>Exercise progress charts</li>
+                            <li>Calorie consumption tracking</li>
+                            <li>Weekly and daily progress views</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4>👥 Student Management</h4>
+                        <ul>
+                            <li>Add multiple children/students</li>
+                            <li>Age, height, weight profiles</li>
+                            <li>BMI calculation</li>
+                            <li>Individual meal & exercise plans</li>
+                            <li>Screen time limit settings</li>
+                            <li><strong>State/Region assignment</strong> (Kolkata, Delhi)</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4>📄 Reports & Export</h4>
+                        <ul>
+                            <li>PDF report generation</li>
+                            <li>Weekly meal plan summaries</li>
+                            <li>Nutritional analysis reports</li>
+                            <li>Share via email/messaging</li>
+                            <li>Print-friendly layouts</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div id="screens" class="card">
+            <h2>🗂️ App Screens & Navigation</h2>
+                
+                <div class="screenshots">
+                    <div class="screen-card">
+                        <h4>🔐 Auth Screens</h4>
+                        <p><strong>Login</strong> - User authentication with Athlead branding</p>
+                        <p><strong>Signup</strong> - Account creation with health profile setup</p>
+                    </div>
+                    
+                    <div class="screen-card">
+                        <h4>🏠 Main Screens</h4>
+                        <p><strong>Dashboard</strong> - Overview of all health metrics & progress</p>
+                        <p><strong>Meals</strong> - Daily meal plan with completion tracking</p>
+                        <p><strong>Exercise</strong> - Workout routines and activity logging</p>
+                    </div>
+                    
+                    <div class="screen-card">
+                        <h4>👤 Profile Screens</h4>
+                        <p><strong>Students</strong> - Manage children/student profiles</p>
+                        <p><strong>Settings</strong> - App preferences and account settings</p>
+                    </div>
+                </div>
+
+                <h3>Navigation Structure</h3>
+                <div class="code-block">
+    App Structure:
+    ├── (auth)/                    # Authentication routes
+    │   ├── login.tsx             # Login screen
+    │   └── signup.tsx            # Registration screen
+    │
+    ├── (main)/                    # Main app routes (protected)
+    │   ├── dashboard.tsx         # Health overview dashboard
+    │   ├── meals/                # Meal tracking
+    │   │   └── index.tsx        # Daily meal plans
+    │   ├── exercise/            # Exercise tracking
+    │   │   └── index.tsx       # Workout routines
+    │   └── students/           # Student management
+    │       └── index.tsx      # Student profiles
+    │
+    └── _layout.tsx              # Root navigation layout
+                </div>
+            </div>
+
+            <div id="meals" class="card">
+            <h2>🍽️ Meal Plan System</h2>
+                
+                <h3>Shelter Home Nutrition Program</h3>
+                <p>The app implements a comprehensive 7-day rotating meal plan designed for children's nutritional needs with <strong>regional customization</strong> for different Indian states.</p>
+
+                <h4>🌍 Country-Wise Regional Meal Plans</h4>
+                <p>The app supports multiple regional meal plans to accommodate local cuisine preferences:</p>
+                
+                <div class="highlight">
+                    <h4>Supported Regions</h4>
+                    <table>
+                        <tr>
+                            <th>Region</th>
+                            <th>Cuisine Type</th>
+                            <th>Key Dishes</th>
+                        </tr>
+                        <tr>
+                            <td><strong>Kolkata</strong></td>
+                            <td>Bengali Cuisine</td>
+                            <td>Alu Seddo, Shukto, Moong Dal, Luchi, Chana Dal</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Delhi</strong></td>
+                            <td>North Indian Cuisine</td>
+                            <td>Chole Bhature, Butter Chicken, Rajma, Dal Makhani, Paratha</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <h4>Regional Meal Plan Features</h4>
+                <ul>
+                    <li><strong>Profile-based viewing:</strong> View region-specific meal plans from the Profile tab</li>
+                    <li><strong>Student region assignment:</strong> Assign students to a region during onboarding</li>
+                    <li><strong>Local ingredient adaptation:</strong> Meal plans use locally available ingredients</li>
+                    <li><strong>Cultural preferences:</strong> Menus respect regional dietary habits and preferences</li>
+                </ul>
+
+                <h4>Daily Meal Structure</h4>
+                <table>
+                    <tr>
+                        <th>Meal</th>
+                        <th>Timing</th>
+                        <th>Example Items</th>
+                        <th>Key Nutrients</th>
+                    </tr>
+                    <tr>
+                        <td>Breakfast</td>
+                        <td>8:00 AM</td>
+                        <td>Milk + Cereal, Poha, Paratha</td>
+                        <td>Protein, Energy</td>
+                    </tr>
+                    <tr>
+                        <td>Lunch</td>
+                        <td>1:00 PM</td>
+                        <td>Chapati, Dal, Rice, Vegetable Curry</td>
+                        <td>Carbs, Protein, Fiber</td>
+                    </tr>
+                    <tr>
+                        <td>Snack</td>
+                        <td>4:00 PM</td>
+                        <td>Roasted Chana, Fruit Chaat, Milk</td>
+                        <td>Protein, Vitamins</td>
+                    </tr>
+                    <tr>
+                        <td>Dinner</td>
+                        <td>8:00 PM</td>
+                        <td>Roti, Paneer/Chicken, Seasonal Veg</td>
+                        <td>Protein, Calcium</td>
+                    </tr>
+                </table>
+
+                <h4>Age-Wise Portion Guidelines</h4>
+                <div class="highlight">
+                    <table>
+                        <tr>
+                            <th>Food Item</th>
+                            <th>8-10 Years</th>
+                            <th>11-13 Years</th>
+                            <th>14-16 Years</th>
+                        </tr>
+                        <tr>
+                            <td>Chapati</td>
+                            <td>2 pieces</td>
+                            <td>3 pieces</td>
+                            <td>4 pieces</td>
+                        </tr>
+                        <tr>
+                            <td>Rice</td>
+                            <td>1 cup</td>
+                            <td>1.5 cups</td>
+                            <td>2 cups</td>
+                        </tr>
+                        <tr>
+                            <td>Dal/Curry</td>
+                            <td>1 cup</td>
+                            <td>1.5 cups</td>
+                            <td>2 cups</td>
+                        </tr>
+                        <tr>
+                            <td>Milk</td>
+                            <td>250ml</td>
+                            <td>300ml</td>
+                            <td>350ml</td>
+                        </tr>
+                        <tr>
+                            <td>Paneer</td>
+                            <td>50g</td>
+                            <td>75g</td>
+                            <td>100g</td>
+                        </tr>
+                        <tr>
+                            <td>Chicken</td>
+                            <td>60g</td>
+                            <td>80g</td>
+                            <td>100g</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div id="exercise" class="card">
+            <h2>🏋️ Exercise Program</h2>
+                
+                <h3>Shelter Home Fitness Program</h3>
+                <p>Structured daily exercise routines designed for children's physical development with varying intensity levels.</p>
+
+                <h4>Exercise Categories</h4>
+                <ul>
+                    <li><strong>Warm-up Exercises:</strong> Jumping jacks, stretching, spot jogging</li>
+                    <li><strong>Cardio:</strong> Running, cycling, jump rope, dancing</li>
+                    <li><strong>Strength:</strong> Bodyweight exercises, resistance training</li>
+                    <li><strong>Flexibility:</strong> Yoga, stretching routines</li>
+                    <li><strong>Sports:</strong> Kho-Kho, Kabaddi, Football, Volleyball</li>
+                </ul>
+
+                <h4>Exercise Tracking Features</h4>
+                <ul>
+                    <li>Mark exercises as completed</li>
+                    <li>Track duration and calories burned</li>
+                    <li>View daily exercise statistics</li>
+                    <li>Weekly exercise summary reports</li>
+                    <li>Progress over time visualization</li>
+                </ul>
+            </div>
+
+            <div id="database" class="card">
+            <h2>🔥 Firebase Database Structure</h2>
+                
+                <div class="firebase-structure">
+    <pre>{
+    <span class="key">"users"</span>: {
+        <span class="string">"userId"</span>: {
+        <span class="key">"profile"</span>: {
+            <span class="string">"name"</span>: "Caregiver Name",
+            <span class="string">"email"</span>: "user@example.com",
+            <span class="string">"createdAt"</span>: "timestamp"
+        },
+        <span class="key">"students"</span>: {
+            <span class="string">"studentId"</span>: {
+            <span class="string">"name"</span>: "Child Name",
+            <span class="string">"age"</span>: 12,
+            <span class="string">"heightCm"</span>: 145,
+            <span class="string">"weightKg"</span>: 38,
+            <span class="string">"dailyCalorieNeeds"</span>: 2200,
+            <span class="string">"screenTimeLimitMin"</span>: 60,
+            <span class="string">"region"</span>: "kolkata"  <span class="key">// NEW: State/Region assignment</span>
+            }
+        },
+        <span class="key">"mealPlans"</span>: {
+            <span class="string">"planId"</span>: {
+            <span class="string">"studentId"</span>: "studentId",
+            <span class="string">"weeklyMenu"</span>: [...],
+            <span class="string">"completedMeals"</span>: {
+                <span class="string">"2025-03-03"</span>: {
+                <span class="string">"breakfast"</span>: true,
+                <span class="string">"lunch"</span>: true,
+                <span class="string">"snack"</span>: false,
+                <span class="string">"dinner"</span>: false
+                }
+            }
+            }
+        },
+        <span class="key">"exercisePlans"</span>: {
+            <span class="string">"planId"</span>: {
+            <span class="string">"studentId"</span>: "studentId",
+            <span class="string">"exercises"</span>: {
+                <span class="string">"2025-03-03"</span>: {
+                <span class="string">"exercises"</span>: [
+                    {
+                    <span class="string">"name"</span>: "Jumping Jacks",
+                    <span class="string">"duration"</span>: 10,
+                    <span class="string">"calories"</span>: 50,
+                    <span class="string">"completed"</span>: true
+                    }
+                ]
+                }
+            }
+            }
+        }
+        }
+    }
+    }</pre>
+                </div>
+            </div>
+
+            <div id="usage" class="card">
+            <h2>📖 How to Use Athlead</h2>
+
+                <h3>Getting Started</h3>
+                <ol class="usage-steps">
+                    <li>
+                        <strong>Install the App</strong><br>
+                        Download and install the APK on your Android device. Open the app to see the Athlead login screen with your logo.
+                    </li>
+                    <li>
+                        <strong>Create Account</strong><br>
+                        Tap "Create account" and fill in your details. Include your health profile (age, height, weight) for personalized recommendations.
+                    </li>
+                    <li>
+                        <strong>Add Students with Region</strong><br>
+                        Go to the Students tab and add children/students. Enter their age, height, and weight, and <strong>select their State/Region</strong> (Kolkata or Delhi) for region-specific meal plans.
+                    </li>
+                </ol>
+
+                <h3>Daily Workflow</h3>
+                <ol class="usage-steps">
+                    <li>
+                        <strong>Check Dashboard</strong><br>
+                        View the daily overview showing all students' meal and exercise progress at a glance.
+                    </li>
+                    <li>
+                        <strong>Track Meals</strong><br>
+                        Navigate to the Meals tab. Select a student to view their daily meal plan. Mark meals as "done" when consumed.
+                    </li>
+                    <li>
+                        <strong>Log Exercise</strong><br>
+                        Go to the Exercise tab. View the daily workout routine. Check off completed exercises to track progress.
+                    </li>
+                    <li>
+                        <strong>Generate Reports</strong><br>
+                        Use the share/export feature to generate PDF reports of weekly meal plans and exercise summaries.
+                    </li>
+                </ol>
+
+                <h3>Key Tips</h3>
+                <div class="highlight">
+                    <ul>
+                        <li><strong>Meal Tracking:</strong> Tap on any meal to see the detailed dish combination and nutritional information</li>
+                        <li><strong>Portion Guidelines:</strong> The app automatically adjusts portions based on each student's age group</li>
+                        <li><strong>Regional Meal Plans:</strong> View Kolkata or Delhi specific meal plans in the Profile tab under "Country Meal Plans"</li>
+                        <li><strong>Student Region Assignment:</strong> Assign students to a region during onboarding to see region-specific meal recommendations</li>
+                        <li><strong>Weekly View:</strong> Use the calendar to navigate between different days and view historical data</li>
+                        <li><strong>Multiple Students:</strong> Add all children in your care to track them from a single dashboard</li>
+                        <li><strong>Offline Support:</strong> Data syncs automatically when internet connection is available</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="files" class="card">
+            <h2>📋 File Structure</h2>
+                
+                <div class="code-block">
+    tracker-app/
+    ├── app/                          # Main application code
+    │   ├── (auth)/                   # Authentication routes
+    │   ├── (main)/                   # Main app screens
+    │   ├── _layout.tsx              # Root layout configuration
+    │   └── index.tsx                # Entry point
+    │
+    ├── src/                          # Source code
+    │   ├── components/              # Reusable UI components
+    │   ├── constants/               # App constants
+    │   │   ├── shelterHomeMealPlan.ts    # Meal database (includes regional menus)
+    │   │   │                               # - KOLKATA_WEEKLY_MENU (Bengali cuisine)
+    │   │   │                               # - DELHI_WEEKLY_MENU (North Indian cuisine)
+    │   │   │                               # - REGION_OPTIONS for UI
+    │   │   ├── exerciseLibrary.ts        # Exercise database
+    │   │   └── mealLibrary.ts           # Legacy meals
+    │   ├── firebase/                # Firebase API functions
+    │   │   ├── authApi.ts          # Authentication
+    │   │   ├── mealPlanApi.ts      # Meal plan operations
+    │   │   ├── exerciseApi.ts      # Exercise tracking
+    │   │   └── trackerApi.ts       # General tracking
+    │   ├── store/                   # Redux state management
+    │   │   ├── authSlice.ts        # Auth state
+    │   │   └── trackerSlice.ts     # Health tracking state
+    │   ├── types/                   # TypeScript definitions
+    │   │   └── tracker.ts          # Data type interfaces
+    │   └── utils/                   # Utility functions
+    │       └── bmi.ts              # BMI calculations
+    │
+    ├── assets/                       # Static assets
+    │   ├── fonts/                   # Custom fonts
+    │   └── images/                  # App images & logos
+    │
+    ├── android/                      # Android native project
+    ├── scripts/                      # Utility scripts
+    ├── app.json                     # Expo configuration
+    ├── eas.json                     # EAS build configuration
+    └── package.json                 # Dependencies
+                </div>
+            </div>
+
+            <div id="build" class="card">
+            <h2>🚀 Building from Source</h2>
+                
+                <h3>Prerequisites</h3>
+                <ul>
+                    <li>Node.js 18+ and npm</li>
+                    <li>Android Studio (for Android SDK)</li>
+                    <li>Java Development Kit (JDK) 17+</li>
+                    <li>Expo CLI</li>
+                </ul>
+
+                <h3>Installation Steps</h3>
+                <div class="code-block">
+    # 1. Clone the repository
+    git clone <repository-url>
+    cd tracker-app
+
+    # 2. Install dependencies
+    npm install
+
+    # 3. Start development server
+    npx expo start
+
+    # 4. Run on Android device/emulator
+    npx expo run:android
+                </div>
+
+                <h3>Building Production APK</h3>
+                <div class="code-block">
+    # Method 1: Local Build
+    export ANDROID_HOME=$HOME/Android/Sdk
+    export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+
+    npx expo prebuild --platform android
+    cd android
+    ./gradlew assembleRelease
+
+    # APK will be at:
+    # android/app/build/outputs/apk/release/app-release.apk
+
+    # Method 2: EAS Cloud Build
+    npx eas build --platform android --profile production
+                </div>
+            </div>
+
+            <div id="config" class="card">
+            <h2>🔧 Configuration</h2>
+                
+                <h3>Firebase Setup</h3>
+                <p>The app uses Firebase Realtime Database for data persistence. Configure your Firebase project in <code>app.json</code>:</p>
+                
+                <div class="code-block">
+    {
+    "expo": {
+        "extra": {
+        "firebaseApiKey": "YOUR_API_KEY",
+        "firebaseAuthDomain": "your-project.firebaseapp.com",
+        "firebaseProjectId": "your-project",
+        "firebaseDatabaseUrl": "https://your-project-default-rtdb.firebaseio.com"
+        }
+    }
+    }
+                </div>
+
+                <h3>Environment Variables</h3>
+                <p>Create a <code>.env</code> file for sensitive configuration (not included in version control):</p>
+                <div class="code-block">
+    FIREBASE_API_KEY=your_api_key
+    FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+    FIREBASE_PROJECT_ID=your_project
+    FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+    FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+    FIREBASE_APP_ID=your_app_id
+    FIREBASE_DATABASE_URL=https://your_project-default-rtdb.firebaseio.com
+                </div>
+            </div>
+
+            <div id="support" class="card">
+            <h2>📞 Support & Contact</h2>
+                
+                <h3>Need Help?</h3>
+                <ul>
+                    <li><strong>Email:</strong> abhay.singh@onmyowntechnology.com</li>
+                    <li><strong>Issues:</strong> Report bugs via project repository</li>
+                    <li><strong>Documentation:</strong> This guide covers all features</li>
+                </ul>
+
+                <h3>Version Information</h3>
+                <table>
+                    <tr>
+                        <th>Property</th>
+                        <th>Value</th>
+                    </tr>
+                    <tr>
+                        <td>App Name</td>
+                        <td>Athlead</td>
+                    </tr>
+                    <tr>
+                        <td>Version</td>
+                        <td>1.0.0</td>
+                    </tr>
+                    <tr>
+                        <td>Package</td>
+                        <td>com.anonymous.trackerapp</td>
+                    </tr>
+                    <tr>
+                        <td>Expo SDK</td>
+                        <td>54.0.30</td>
+                    </tr>
+                    <tr>
+                        <td>React Native</td>
+                        <td>0.81.5</td>
+                    </tr>
+                </table>
+            </div>
+
+            <footer>
+                <p>🏃‍♂️ Athlead - Empowering Healthier Futures for Children</p>
+                <p> 2025 Shelter Home Nutrition Program. All rights reserved.</p>
+            </footer>
+        </div>
+        <script>
+            // Smooth scroll behavior for navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href').substring(1);
+                    const targetElement = document.getElementById(targetId);
+                    if (targetElement) {
+                        targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        
+                        // Update active state
+                        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                        this.classList.add('active');
+                        
+                        // Update progress bar
+                        const sections = ['overview', 'tech-stack', 'features', 'screens', 'meals', 'exercise', 'database', 'usage', 'files', 'build', 'config', 'support'];
+                        const currentIndex = sections.indexOf(targetId);
+                        const progress = ((currentIndex + 1) / sections.length) * 100;
+                        document.querySelector('.progress-bar').style.width = progress + '%';
+                    }
+                });
+            });
+            
+            // Update progress bar on scroll
+            window.addEventListener('scroll', () => {
+                const sections = ['overview', 'tech-stack', 'features', 'screens', 'meals', 'exercise', 'database', 'usage', 'files', 'build', 'config', 'support'];
+                const scrollPosition = window.scrollY + window.innerHeight / 2;
+                
+                for (let i = 0; i < sections.length; i++) {
+                    const section = document.getElementById(sections[i]);
+                    if (section) {
+                        const sectionTop = section.offsetTop;
+                        const sectionHeight = section.offsetHeight;
+                        
+                        if (scrollPosition >= sectionTop && scrollPosition < sectionTop + sectionHeight) {
+                            // Update active navigation
+                            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                            document.querySelector(`[href="#${sections[i]}"]`).classList.add('active');
+                            
+                            // Update progress bar
+                            const progress = ((i + 1) / sections.length) * 100;
+                            document.querySelector('.progress-bar').style.width = progress + '%';
+                            break;
+                        }
+                    }
+                }
+            });
+        </script>
+    </body>
+</html>

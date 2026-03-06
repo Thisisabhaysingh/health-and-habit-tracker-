@@ -10,6 +10,13 @@ const manifestExtra =
   Constants.manifest2?.extra ??
   {};
 
+// Debug: Log config availability (remove in production)
+console.log('Firebase config check:', {
+  hasApiKey: !!manifestExtra.firebaseApiKey,
+  hasProjectId: !!manifestExtra.firebaseProjectId,
+  hasDatabaseUrl: !!manifestExtra.firebaseDatabaseUrl,
+});
+
 const firebaseConfig = {
   apiKey: manifestExtra.firebaseApiKey,
   authDomain: manifestExtra.firebaseAuthDomain,
@@ -20,6 +27,11 @@ const firebaseConfig = {
   databaseURL: manifestExtra.firebaseDatabaseUrl,
   measurementId: manifestExtra.firebaseMeasurementId,
 };
+
+// Validate config before initializing
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  console.error('Firebase config missing! Check app.json extra values.');
+}
 
 const app = initializeApp(firebaseConfig);
 

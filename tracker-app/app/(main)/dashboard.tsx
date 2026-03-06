@@ -1,123 +1,44 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Animated, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  Card,
-  Chip,
-  Divider,
-  ProgressBar,
-  Text,
-  useTheme,
-} from 'react-native-paper';
+import { Card, ProgressBar, Text, useTheme } from 'react-native-paper';
 
 import { useAppSelector, useAppDispatch } from '@/hooks/redux';
-import { calculateRecommendedCalories } from '@/utils/bmi';
-import type { Student } from '@/types/tracker';
+import type { Student, MealPlan, ExercisePlan } from '@/types/tracker';
 import { 
-  HOME_EXERCISES, 
-  GYM_EXERCISES, 
-  getExercisesByBMI, 
-  getExerciseByCategory, 
-  calculateBMI,
-  getBMICategory,
-  getComplementaryExercises,
-  type Exercise 
-} from '@/constants/exerciseLibrary';
+  subscribeToCurrentMealPlan,
+  subscribeToCurrentExercisePlan,
+  subscribeToStudents,
+  subscribeToExercisePlans,
+  subscribeToMealPlans
+} from '@/src/firebase/trackerApi';
+import { subscribeToMealPlan as subscribeToShelterMealPlan } from '@/src/firebase/mealPlanApi';
+import { calculateDailyNutrition } from '@/src/constants/shelterHomeMealPlan';
 
-const FloatingBackground = () => {
-  const floatAnim1 = useRef(new Animated.Value(0)).current;
-  const floatAnim2 = useRef(new Animated.Value(0)).current;
-  const floatAnim3 = useRef(new Animated.Value(0)).current;
-  const floatAnim4 = useRef(new Animated.Value(0)).current;
-  const floatAnim5 = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const animateFloat = (anim: Animated.Value, delay: number) => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(anim, {
-            toValue: 1,
-            duration: 3000 + delay,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim, {
-            toValue: 0,
-            duration: 3000 + delay,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    };
-
-    animateFloat(floatAnim1, 0);
-    animateFloat(floatAnim2, 500);
-    animateFloat(floatAnim3, 1000);
-    animateFloat(floatAnim4, 1500);
-    animateFloat(floatAnim5, 2000);
-  }, []);
-
-  const icons = [
-    { name: 'dumbbell', anim: floatAnim1, left: '10%', top: '15%', color: '#ef4444' },
-    { name: 'heart-pulse', anim: floatAnim2, left: '80%', top: '25%', color: '#ec4899' },
-    { name: 'apple', anim: floatAnim3, left: '15%', top: '60%', color: '#10b981' },
-    { name: 'run', anim: floatAnim4, left: '75%', top: '70%', color: '#3b82f6' },
-    { name: 'meditation', anim: floatAnim5, left: '50%', top: '40%', color: '#8b5cf6' },
-  ];
-
-  return (
-    <View style={styles.floatingBackground}>
-      {icons.map((icon, index) => (
-        <Animated.View
-          key={index}
-          style={[
-            styles.floatingIcon,
-            {
-              left: icon.left as any,
-              top: icon.top as any,
-              transform: [
-                {
-                  translateY: icon.anim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, -20],
-                  }),
-                },
-              ],
-            },
-          ]}>
-          <MaterialCommunityIcons
-            name={icon.name as any}
-            size={32}
-            color={icon.color}
-          />
-        </Animated.View>
-      ))}
-    </View>
-  );
+// Color themes
+const colors = {
+  meal: {
+    primary: '#16a34a',
+    light: '#dcfce7',
+    surface: '#f0fdf4',
+    dark: '#15803d',
+  },
+  exercise: {
+    primary: '#ea580c',
+    light: '#ffedd5',
+    surface: '#fff7ed',
+    dark: '#c2410c',
+  },
+  screen: {
+    primary: '#0891b2',
+    light: '#cffafe',
+    surface: '#ecfeff',
+    dark: '#0e7490',
+  },
 };
 
-const createPalette = (isDark: boolean) => ({
-  background: isDark ? 'rgba(0,8,14,0.9)' : '#f8fafc',
-  heroGradient: isDark
-    ? (['#ff006e', '#8338ec', '#3a86ff'] as const)
-    : (['#ff006e', '#8338ec', '#3a86ff'] as const),
-  surface: isDark ? 'rgba(4,22,33,0.72)' : 'rgba(255,255,255,0.85)',
-  border: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.12)',
-  textPrimary: isDark ? '#f7fbff' : '#0f172a',
-  textMuted: isDark ? 'rgba(247,251,255,0.72)' : '#475569',
-  accentWarm: '#f87171',
-  accentCool: '#38bdf8',
-  accentSun: '#facc15',
-  accentLime: '#4ade80',
-  pillBg: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.04)',
-  bullet: isDark ? '#0fa3b1' : '#0ea5e9',
-  avatarBg: isDark ? 'rgba(255,255,255,0.1)' : '#e0f2fe',
-  avatarText: isDark ? '#f7fbff' : '#0f172a',
-});
-
 const fonts = {
-  light: 'WorkSans_300Light',
   regular: 'WorkSans_400Regular',
   medium: 'WorkSans_500Medium',
   semibold: 'WorkSans_600SemiBold',
@@ -127,26 +48,65 @@ const fonts = {
 export default function DashboardScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { profile } = useAppSelector((state) => state.auth);
-  const { meals, exerciseTasks, screenSessions, currentMealPlan, currentExercisePlan, students, mealPlans } = useAppSelector((state) => state.tracker);
+  const dispatch = useAppDispatch();
+  const { user, profile } = useAppSelector((state) => state.auth);
+  const { screenSessions, currentMealPlan, currentExercisePlan, students, mealPlans, exercisePlans } = useAppSelector((state) => state.tracker);
 
   const heroAnim = useRef(new Animated.Value(0)).current;
-  
-  // State for student meal details modal
-  const [selectedStudentForMeals, setSelectedStudentForMeals] = useState<Student | null>(null);
-  const [showMealModal, setShowMealModal] = useState(false);
   const [expandedStudents, setExpandedStudents] = useState<Set<string>>(new Set());
-  const [expandedExerciseStudents, setExpandedExerciseStudents] = useState<Set<string>>(new Set());
 
-  const todayLabel = useMemo(
-    () =>
-      new Date().toLocaleDateString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      }),
-    [],
-  );
+  // Load all exercise plans on mount
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const unsubscribers: (() => void)[] = [];
+
+    // Subscribe to ALL meal plans for real-time updates
+    const unsubscribeAllMealPlans = subscribeToMealPlans(user.uid, (plans) => {
+      dispatch({ type: 'tracker/setMealPlans', payload: plans });
+    });
+    unsubscribers.push(unsubscribeAllMealPlans);
+
+    // Subscribe to ALL exercise plans for real-time updates
+    const unsubscribeAllExercisePlans = subscribeToExercisePlans(user.uid, (plans) => {
+      dispatch({ type: 'tracker/setExercisePlans', payload: plans });
+    });
+    unsubscribers.push(unsubscribeAllExercisePlans);
+
+    // Subscribe to updates for all students
+    students.forEach(student => {
+      // Subscribe to old format meal plans
+      const unsubscribeMeal = subscribeToCurrentMealPlan(user.uid, student.id, (mealPlan) => {
+        if (mealPlan) {
+          dispatch({ type: 'tracker/addMealPlan', payload: mealPlan });
+        }
+      });
+      unsubscribers.push(unsubscribeMeal);
+
+      // Subscribe to new Shelter Home meal plans
+      const unsubscribeShelterMeal = subscribeToShelterMealPlan(user.uid, student.id, (mealPlan) => {
+        if (mealPlan) {
+          dispatch({ type: 'tracker/addMealPlan', payload: mealPlan });
+        }
+      });
+      unsubscribers.push(unsubscribeShelterMeal);
+
+      const unsubscribeExercise = subscribeToCurrentExercisePlan(user.uid, student.id, (exercisePlan) => {
+        if (exercisePlan) {
+          dispatch({ type: 'tracker/setCurrentExercisePlan', payload: exercisePlan });
+          dispatch({ type: 'tracker/addExercisePlan', payload: exercisePlan });
+        }
+      });
+      unsubscribers.push(unsubscribeExercise);
+    });
+
+    const unsubscribeStudents = subscribeToStudents(user.uid, (updatedStudents) => {
+      dispatch({ type: 'tracker/setStudents', payload: updatedStudents });
+    });
+    unsubscribers.push(unsubscribeStudents);
+
+    return () => unsubscribers.forEach(unsub => unsub());
+  }, [user?.uid, dispatch, students.length]);
 
   useEffect(() => {
     Animated.spring(heroAnim, {
@@ -157,1029 +117,1057 @@ export default function DashboardScreen() {
     }).start();
   }, [heroAnim]);
 
-  const palette = useMemo(() => createPalette(theme.dark), [theme.dark]);
+  const palette = useMemo(() => ({
+    background: theme.dark ? '#0f172a' : '#f8fafc',
+    surface: theme.dark ? '#1e293b' : '#ffffff',
+    textPrimary: theme.dark ? '#f1f5f9' : '#1e293b',
+    textSecondary: theme.dark ? '#94a3b8' : '#64748b',
+    border: theme.dark ? '#334155' : '#e2e8f0',
+  }), [theme.dark]);
 
-  const cardSurface = useMemo(
-    () => ({
-      backgroundColor: palette.surface,
-      borderColor: palette.border,
-      borderWidth: 1,
-    }),
-    [palette.surface, palette.border],
-  );
+  const todayLabel = useMemo(() =>
+    new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }),
+  []);
 
-  const {
-    caloriesConsumed,
-    calorieTarget,
-    nextMeal,
-    nextExercise,
-    screenUsage,
-    screenLimit,
-    weeklyAvgScreen,
-  } = useMemo(() => {
-    const todayKey = new Date().toDateString();
-    const todaysMeals = meals.filter(
-      (meal) => new Date(meal.loggedAt).toDateString() === todayKey,
-    );
-    const completedMeals = todaysMeals.filter(meal => meal.isCompleted);
-    const calories = completedMeals.reduce((sum, meal) => sum + meal.calories, 0);
-    
-    // Calculate recommended calories based on BMI if profile exists
-    let target = 1800; // Default fallback
-    if (profile?.heightCm && profile?.weightKg && profile?.age) {
-      target = calculateRecommendedCalories(
-        profile.heightCm,
-        profile.weightKg,
-        profile.age,
-        'male' // Default to male, could be enhanced later
-      );
-    } else if (profile?.calorieTarget) {
-      // Fallback to existing calorieTarget if BMI calculation not possible
-      target = profile.calorieTarget;
+  const today = new Date().toISOString().split('T')[0];
+
+  // Get ALL meal plans (not just current)
+  const allMealPlans = useMemo(() => {
+    const plans = [...mealPlans];
+    if (currentMealPlan && !plans.find(p => p.id === currentMealPlan.id)) {
+      plans.push(currentMealPlan);
     }
-    
-    const next = todaysMeals[0]?.foodName ?? meals[0]?.foodName ?? 'Hydrate & stretch';
+    return plans;
+  }, [mealPlans, currentMealPlan]);
 
-    // Filter exercise tasks for today only
-    const todaysExerciseTasks = exerciseTasks.filter(
-      (task) => task.date === todayKey,
-    );
-    
-    // Find next exercise to focus on (incomplete task)
-    const nextExerciseTask = todaysExerciseTasks.find((task) => !task.completed);
-    const nextExercise = nextExerciseTask?.name || 'All exercises completed!';
-    
-    const screenToday = screenSessions[0]?.minutes ?? 0;
-    const limit = profile?.screenTimeLimitMin ?? 180;
-    const avg =
-      screenSessions.reduce((sum, session) => sum + session.minutes, 0) /
-        Math.max(1, screenSessions.length) || 0;
-
-    return {
-      caloriesConsumed: calories,
-      calorieTarget: target,
-      nextMeal: next,
-      nextExercise: nextExercise,
-      screenUsage: screenToday,
-      screenLimit: limit,
-      weeklyAvgScreen: Math.round(avg),
-    };
-  }, [meals, exerciseTasks, profile, screenSessions]);
-
-  const calorieProgress = Math.min(caloriesConsumed / calorieTarget, 1);
-  const screenProgress = Math.min(screenUsage / screenLimit, 1);
-
-  // Get today's exercise tasks for movement plan
-  const todayExerciseTasks = useMemo(() => {
-    const todayKey = new Date().toDateString();
-    return exerciseTasks.filter((task) => task.date === todayKey);
-  }, [exerciseTasks]);
-
-  // Calculate exercise plan completion for students
-  const { completedExercisePlans, totalExercisePlans, exercisePlanProgress, studentsWithPlans } = useMemo(() => {
-    if (!currentExercisePlan || !students.length) {
-      return {
-        completedExercisePlans: 0,
-        totalExercisePlans: 0,
-        exercisePlanProgress: 0,
-        studentsWithPlans: [],
-      };
+  // Get ALL exercise plans (not just current) - use exercisePlans from top level
+  const allExercisePlans = useMemo(() => {
+    const plans: ExercisePlan[] = [...(exercisePlans || [])];
+    // Also add currentExercisePlan if it exists and not already included
+    if (currentExercisePlan && !plans.find(p => p.id === currentExercisePlan.id)) {
+      plans.push(currentExercisePlan);
     }
+    // Ensure each plan has exercises property
+    return plans.filter(p => p && p.exercises);
+  }, [exercisePlans, currentExercisePlan]);
 
-    const today = new Date().toISOString().split('T')[0];
-    const todayExercises = currentExercisePlan.exercises[today];
-    
-    if (!todayExercises) {
-      const studentWithPlan = students.find(s => s.id === currentExercisePlan.studentId);
-      return {
-        completedExercisePlans: 0,
-        totalExercisePlans: 3,
-        exercisePlanProgress: 0,
-        studentsWithPlans: studentWithPlan ? [studentWithPlan] : [],
-      };
-    }
+  // Calculate TOTAL meal progress across ALL students - Updated for Shelter Home format
+  const mealProgress = useMemo(() => {
+    let completedMeals = 0;
+    let totalMeals = 0;
+    let caloriesConsumed = 0;
+    let totalTargetCalories = 0;
 
-    // Count completed exercises for today
-    const completedExercises = Object.values(todayExercises.completed).filter(Boolean).length;
-    const totalExercises = 3; // mobility, strength, cardio
-    
-    // Calculate progress percentage
-    const progress = (completedExercises / totalExercises) * 100;
-    
-    // Get the student who has this exercise plan
-    const studentWithPlan = students.find(s => s.id === currentExercisePlan.studentId);
-    
-    return {
-      completedExercisePlans: completedExercises,
-      totalExercisePlans: totalExercises,
-      exercisePlanProgress: Math.round(progress),
-      studentsWithPlans: studentWithPlan ? [studentWithPlan] : [],
-    };
-  }, [currentExercisePlan, students]);
-
-  // Calculate meal plan completion for students
-  const { completedMealPlans, totalMealPlans, mealPlanProgress } = useMemo(() => {
-    if (!currentMealPlan) {
-      return {
-        completedMealPlans: 0,
-        totalMealPlans: 0,
-        mealPlanProgress: 0,
-      };
-    }
-
-    const today = new Date().toISOString().split('T')[0];
-    const todayMeals = currentMealPlan.meals[today];
-    
-    if (!todayMeals) {
-      return {
-        completedMealPlans: 0,
-        totalMealPlans: 4,
-        mealPlanProgress: 0,
-      };
-    }
-
-    // Count completed meals for today
-    const completedMeals = Object.values(todayMeals.consumed).filter(Boolean).length;
-    const totalMeals = 4; // breakfast, lunch, dinner, snack
-    
-    // Calculate progress percentage
-    const progress = (completedMeals / totalMeals) * 100;
-    
-    return {
-      completedMealPlans: completedMeals,
-      totalMealPlans: totalMeals,
-      mealPlanProgress: Math.round(progress),
-    };
-  }, [currentMealPlan]);
-
-  // Calculate student meal data for timeline - handle multiple children
-  const studentMealData = useMemo(() => {
-    if (!mealPlans.length || !students.length) {
-      return [];
-    }
-
-    const today = new Date().toISOString().split('T')[0];
-    const allStudentMeals: any[] = [];
-
-    mealPlans.forEach(mealPlan => {
-      const studentWithPlan = students.find(s => s.id === mealPlan.studentId);
-      
-      if (!studentWithPlan) return;
-
-      const todayMeals = mealPlan.meals[today];
-      if (!todayMeals) return;
-
-      // Create meal data for each meal type for this student
-      const mealTypes = [
-        { type: 'breakfast', name: '🌅 Breakfast', emoji: '🌅' },
-        { type: 'lunch', name: '☀️ Lunch', emoji: '☀️' },
-        { type: 'dinner', name: '🌆 Dinner', emoji: '🌆' },
-        { type: 'snack', name: '🍎 Snack', emoji: '🍎' }
-      ];
-
-      mealTypes.forEach(mealType => {
-        const mealKey = mealType.type as 'breakfast' | 'lunch' | 'dinner' | 'snack';
-        const mealData = todayMeals[mealKey];
+    // Calculate from all meal plans using new Shelter Home format
+    allMealPlans.forEach((plan: any) => {
+      // New format: weeklyMenu + completedMeals
+      if (plan.weeklyMenu && plan.completedMeals) {
+        const todayDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+        const todayPlan = plan.weeklyMenu.find((day: any) => day.day === todayDayName);
+        const todayCompleted = plan.completedMeals[today] || { breakfast: false, lunch: false, dinner: false, snack: false };
         
-        allStudentMeals.push({
-          studentId: studentWithPlan.id,
-          studentName: studentWithPlan.name,
-          studentAge: studentWithPlan.age,
-          studentBMI: studentWithPlan.bmi,
-          mealType: mealType.type,
-          mealName: mealType.name,
-          mealEmoji: mealType.emoji,
-          foodName: mealData.name,
-          calories: mealData.calories,
-          grams: mealData.grams,
-          consumed: todayMeals.consumed[mealKey],
-          loggedAt: new Date().toISOString(),
-          mealPlanId: mealPlan.id
-        });
-      });
-    });
-
-    return allStudentMeals;
-  }, [mealPlans, students]);
-
-  // Get weekly meal data for selected student
-  const getStudentWeeklyMeals = (studentId: string) => {
-    const studentMealPlan = mealPlans.find(plan => plan.studentId === studentId);
-    if (!studentMealPlan) return [];
-
-    const weeklyMeals: any[] = [];
-    const today = new Date();
-    
-    // Generate next 7 days
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      const dateStr = date.toISOString().split('T')[0];
-      const dayName = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      
-      const dayMeals = studentMealPlan.meals[dateStr];
-      if (dayMeals) {
-        const mealTypes = [
-          { type: 'breakfast', name: '🌅 Breakfast', emoji: '🌅' },
-          { type: 'lunch', name: '☀️ Lunch', emoji: '☀️' },
-          { type: 'dinner', name: '🌆 Dinner', emoji: '🌆' },
-          { type: 'snack', name: '🍎 Snack', emoji: '🍎' }
-        ];
-
-        mealTypes.forEach(mealType => {
-          const mealKey = mealType.type as 'breakfast' | 'lunch' | 'dinner' | 'snack';
-          const mealData = dayMeals[mealKey];
+        if (todayPlan) {
+          const completedCount = Object.values(todayCompleted).filter(Boolean).length;
+          completedMeals += completedCount;
+          totalMeals += 4;
           
-          weeklyMeals.push({
-            date: dateStr,
-            dayName,
-            mealType: mealType.type,
-            mealName: mealType.name,
-            mealEmoji: mealType.emoji,
-            foodName: mealData.name,
-            calories: mealData.calories,
-            grams: mealData.grams,
-            consumed: dayMeals.consumed[mealKey]
-          });
+          // Calculate calories based on completion
+          const dailyNutrition = calculateDailyNutrition(todayPlan);
+          caloriesConsumed += dailyNutrition.totalCalories * (completedCount / 4);
+        }
+      } 
+      // Old format fallback: meals object
+      else if (plan.meals && plan.meals[today]) {
+        const todayMeals = plan.meals[today];
+        Object.values(todayMeals.consumed).forEach((consumed: any) => {
+          if (consumed) completedMeals++;
+          totalMeals++;
         });
-      }
-    }
-
-    return weeklyMeals;
-  };
-
-  // Handle student click to show meal details
-  const handleStudentClick = (studentId: string) => {
-    const student = students.find(s => s.id === studentId);
-    if (student) {
-      setSelectedStudentForMeals(student);
-      setShowMealModal(true);
-    }
-  };
-
-  // Toggle student section expansion
-  const toggleStudentExpansion = (studentId: string) => {
-    setExpandedStudents(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(studentId)) {
-        newSet.delete(studentId);
-      } else {
-        newSet.add(studentId);
-      }
-      return newSet;
-    });
-  };
-
-  // Toggle exercise section expansion
-  const toggleExerciseExpansion = (studentId: string) => {
-    setExpandedExerciseStudents(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(studentId)) {
-        newSet.delete(studentId);
-      } else {
-        newSet.add(studentId);
-      }
-      return newSet;
-    });
-  };
-
-  // Calculate meal completion statistics for hero card
-  const mealCompletionStats = useMemo(() => {
-    if (!students.length) {
-      return { completedAll: 0, totalStudents: 0, percentage: 0 };
-    }
-
-    const today = new Date().toISOString().split('T')[0];
-    let completedAllCount = 0;
-
-    students.forEach(student => {
-      const studentMealPlan = mealPlans.find(plan => plan.studentId === student.id);
-      if (!studentMealPlan) return; // Student doesn't have meal plan, can't be counted as completed
-
-      const todayMeals = studentMealPlan.meals[today];
-      if (todayMeals) {
-        const allMealsCompleted = todayMeals.consumed.breakfast && 
-                                todayMeals.consumed.lunch && 
-                                todayMeals.consumed.dinner && 
-                                todayMeals.consumed.snack;
         
-        if (allMealsCompleted) {
-          completedAllCount++;
+        // Calculate consumed calories
+        const consumedCount = Object.values(todayMeals.consumed).filter(Boolean).length;
+        caloriesConsumed += (todayMeals.totalCalories || 0) * (consumedCount / 4);
+      }
+    });
+
+    // Calculate total target calories for all students
+    students.forEach(student => {
+      totalTargetCalories += student.dailyCalorieNeeds || 2000;
+    });
+
+    // If no meal plans exist yet, show expected total based on students
+    if (totalMeals === 0 && students.length > 0) {
+      totalMeals = students.length * 4; // 4 meals per student
+    }
+
+    return {
+      completed: completedMeals,
+      total: totalMeals,
+      percentage: totalMeals > 0 ? Math.round((completedMeals / totalMeals) * 100) : 0,
+      caloriesConsumed: Math.round(caloriesConsumed),
+      caloriesTarget: totalTargetCalories,
+      remaining: totalMeals - completedMeals,
+    };
+  }, [allMealPlans, today, students]);
+
+  // Calculate TOTAL exercise progress across ALL students
+  const exerciseProgress = useMemo(() => {
+    let completedExercises = 0;
+    let totalExercises = 0;
+    let durationCompleted = 0;
+    let totalDuration = 0;
+    let caloriesBurned = 0;
+    let totalTargetCalories = 0;
+
+    // Calculate from all exercise plans using allExercisePlans
+    allExercisePlans.forEach((plan: ExercisePlan) => {
+      if (plan.exercises[today]) {
+        const todayExercises = plan.exercises[today];
+        // Handle new Shelter Home program structure
+        const dayPlan = todayExercises as any;
+        if (dayPlan.exercises && Array.isArray(dayPlan.exercises)) {
+          const exercises = dayPlan.exercises;
+          const completed = exercises.filter((ex: any) => ex.completed).length;
+          completedExercises += completed;
+          totalExercises += exercises.length;
+          
+          // Calculate weighted duration and calories
+          exercises.forEach((ex: any) => {
+            totalDuration += ex.duration || 0;
+            totalTargetCalories += ex.calories || 0;
+            if (ex.completed) {
+              durationCompleted += ex.duration || 0;
+              caloriesBurned += ex.calories || 0;
+            }
+          });
+        } else {
+          // Fallback to old structure (backward compatibility)
+          const completed = Object.values(todayExercises.completed || {}).filter(Boolean).length;
+          completedExercises += completed;
+          totalExercises += 3; // 3 exercises per day per student
+          
+          durationCompleted += (todayExercises.totalDuration || 0) * (completed / 3);
+          totalDuration += todayExercises.totalDuration || 0;
+          caloriesBurned += (todayExercises.totalCalories || 0) * (completed / 3);
+          totalTargetCalories += todayExercises.totalCalories || 0;
         }
       }
     });
 
-    const totalStudents = students.length;
-    const percentage = totalStudents > 0 ? (completedAllCount / totalStudents) * 100 : 0;
+    // If no exercise plans exist yet, show expected total based on students
+    if (totalExercises === 0 && students.length > 0) {
+      totalExercises = students.length * 8; // ~8 exercises per student (Shelter Home program)
+      totalDuration = students.length * 40; // ~40 min per student
+    }
 
     return {
-      completedAll: completedAllCount,
-      totalStudents: totalStudents,
-      percentage: Math.round(percentage)
+      completed: completedExercises,
+      total: totalExercises,
+      percentage: totalExercises > 0 ? Math.round((completedExercises / totalExercises) * 100) : 0,
+      durationCompleted: Math.round(durationCompleted),
+      totalDuration,
+      caloriesBurned: Math.round(caloriesBurned),
+      remaining: totalExercises - completedExercises,
     };
-  }, [mealPlans, students]);
-  useEffect(() => {
-    if (screenUsage > screenLimit) {
-      Alert.alert(
-        'Screen Time Limit Exceeded',
-        `You've used ${screenUsage} minutes of screen time today, which exceeds your limit of ${screenLimit} minutes. Consider taking a break!`,
-        [{ text: 'OK', style: 'default' }]
-      );
+  }, [allExercisePlans, today, students]);
+
+  // Calculate screen time
+  const screenProgress = useMemo(() => {
+    const screenToday = screenSessions[0]?.minutes ?? 0;
+    const limit = profile?.screenTimeLimitMin ?? 180;
+    return {
+      used: screenToday,
+      limit,
+      percentage: Math.min(screenToday / limit, 1),
+      remaining: Math.max(limit - screenToday, 0),
+    };
+  }, [screenSessions, profile]);
+
+  // Get weekly stats aggregated across all students - Updated for Shelter Home format
+  const weeklyStats = useMemo(() => {
+    let mealDaysTracked = 0;
+    let exerciseDaysTracked = 0;
+    let totalCaloriesConsumed = 0;
+    let totalCaloriesBurned = 0;
+    let totalExerciseMinutes = 0;
+
+    allMealPlans.forEach((plan: any) => {
+      // New Shelter Home format
+      if (plan.weeklyMenu && plan.completedMeals) {
+        Object.entries(plan.completedMeals).forEach(([date, dayCompleted]: [string, any]) => {
+          const completed = Object.values(dayCompleted).filter(Boolean).length;
+          if (completed > 0) {
+            mealDaysTracked++;
+            // Find the day plan for this date
+            const dateObj = new Date(date);
+            const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dateObj.getDay()];
+            const dayPlan = plan.weeklyMenu.find((d: any) => d.day === dayName);
+            if (dayPlan) {
+              const nutrition = calculateDailyNutrition(dayPlan);
+              totalCaloriesConsumed += nutrition.totalCalories * (completed / 4);
+            }
+          }
+        });
+      }
+      // Old format fallback
+      else if (plan.meals) {
+        Object.entries(plan.meals).forEach(([date, dayMeals]: [string, any]) => {
+          const completed = Object.values(dayMeals.consumed).filter(Boolean).length;
+          if (completed > 0) mealDaysTracked++;
+          totalCaloriesConsumed += (dayMeals.totalCalories || 0) * (completed / 4);
+        });
+      }
+    });
+
+    // Use allExercisePlans from top level
+    allExercisePlans.forEach((plan: ExercisePlan) => {
+      Object.entries(plan.exercises).forEach(([date, dayExercises]) => {
+        const dayPlan = dayExercises as any;
+        // Handle new Shelter Home format
+        if (dayPlan.exercises && Array.isArray(dayPlan.exercises)) {
+          const completed = dayPlan.exercises.filter((ex: any) => ex.completed).length;
+          if (completed > 0) exerciseDaysTracked++;
+          dayPlan.exercises.forEach((ex: any) => {
+            if (ex.completed) {
+              totalCaloriesBurned += ex.calories || 0;
+              totalExerciseMinutes += ex.duration || 0;
+            }
+          });
+        } else {
+          // Fallback to old format
+          const completed = Object.values(dayExercises.completed || {}).filter(Boolean).length;
+          if (completed > 0) exerciseDaysTracked++;
+          totalCaloriesBurned += (dayExercises.totalCalories || 0) * (completed / 3);
+          totalExerciseMinutes += (dayExercises.totalDuration || 0) * (completed / 3);
+        }
+      });
+    });
+
+    return {
+      mealDaysTracked,
+      exerciseDaysTracked,
+      avgDailyCalories: mealDaysTracked > 0 ? Math.round(totalCaloriesConsumed / mealDaysTracked) : 0,
+      avgDailyBurn: exerciseDaysTracked > 0 ? Math.round(totalCaloriesBurned / exerciseDaysTracked) : 0,
+      avgExerciseMinutes: exerciseDaysTracked > 0 ? Math.round(totalExerciseMinutes / exerciseDaysTracked) : 0,
+    };
+  }, [allMealPlans, allExercisePlans]);
+
+  const toggleStudentExpansion = (studentId: string) => {
+    setExpandedStudents(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(studentId)) newSet.delete(studentId);
+      else newSet.add(studentId);
+      return newSet;
+    });
+  };
+
+  const getStudentTodayMeals = (studentId: string): any => {
+    const plan = allMealPlans.find((p: any) => p.studentId === studentId);
+    if (!plan) return null;
+    
+    // New Shelter Home format
+    if (plan.weeklyMenu && plan.completedMeals) {
+      const todayDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+      const todayPlan = plan.weeklyMenu.find((day: any) => day.day === todayDayName);
+      const todayCompleted = plan.completedMeals[today] || { breakfast: false, lunch: false, dinner: false, snack: false };
+      
+      if (todayPlan) {
+        return {
+          consumed: todayCompleted,
+          meals: {
+            breakfast: todayPlan.breakfast,
+            lunch: todayPlan.lunch,
+            dinner: todayPlan.dinner,
+            snack: todayPlan.snack
+          }
+        };
+      }
     }
-  }, [screenUsage, screenLimit]);
+    
+    // Old format fallback
+    return plan?.meals?.[today];
+  };
+
+  const getStudentTodayExercises = (studentId: string): any => {
+    // Use allExercisePlans from closure
+    const plan = allExercisePlans.find((p: ExercisePlan) => p.studentId === studentId);
+    return plan?.exercises[today];
+  };
 
   return (
-    <View style={[styles.screen, { backgroundColor: 'transparent' }]}>
-      <FloatingBackground />
-      {/* App Header Bar - Fixed Position */}
-      <View style={styles.appHeader}>
-        <Text style={styles.appHeaderText}>Healthify</Text>
-      </View>
-      
+    <View style={[styles.container, { backgroundColor: palette.background }]}>
       <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingTop: insets.top + 80, paddingBottom: 60 },
-        ]}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 100 }]}
         showsVerticalScrollIndicator={false}>
         
-        <Animated.View
-          style={[
-            styles.heroWrapper,
-            {
-              opacity: heroAnim,
-              transform: [
-                {
-                  translateY: heroAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [30, 0],
-                  }),
-                },
-                {
-                  scale: heroAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.95, 1],
-                  }),
-                },
-              ],
-            },
-          ]}>
-          <Card style={styles.heroCard} mode="contained">
-            <View style={[styles.heroGradient, { backgroundColor: '#006879' }]}>
-              <View style={styles.heroHeader}>
-                <View>
-                  <Text
-                    variant="titleMedium"
-                    style={[styles.heroGreeting, { color: 'white' }]}>
-                    Hey {profile?.name?.split(' ')[0] ?? 'Explorer'} 👋🏽
-                  </Text>
-                  <Text style={[styles.heroSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
-                    {todayLabel} · Here's your wellbeing snapshot.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.heroMetaRow}>
-                <View style={[styles.heroMetaCard, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
-                  <Text style={[styles.heroMetaLabel, { color: 'rgba(255,255,255,0.8)' }]}>
-                    Today's Meals
-                  </Text>
-                  <Text style={[styles.heroMetaValue, { color: 'white' }]}>
-                    {mealCompletionStats.completedAll}/{mealCompletionStats.totalStudents} Done
-                  </Text>
-                  <View style={styles.heroProgressTrack}>
-                    <View
-                      style={[
-                        styles.heroProgressFill,
-                        { width: `${mealCompletionStats.percentage}%`, backgroundColor: palette.accentLime },
-                      ]}
-                    />
-                  </View>
-                </View>
-                <View style={[styles.heroMetaCard, { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
-                  <Text style={[styles.heroMetaLabel, { color: 'rgba(255,255,255,0.8)' }]}>Next focus</Text>
-                  <Text style={[styles.heroMetaValueSmall, { color: 'white' }]} numberOfLines={2}>
-                    {nextExercise}
-                  </Text>
-                  <Chip
-                    compact
-                    icon="calendar-check"
-                    style={[styles.heroPill, { backgroundColor: 'rgba(255,255,255,0.12)' }]}
-                    textStyle={{ color: 'white', fontSize: 12 }}>
-                    {completedExercisePlans}/{totalExercisePlans || 1} exercises
-                  </Chip>
-                </View>
-              </View>
-            </View>
-          </Card>
-        </Animated.View>
-
-        <View style={styles.metricRow}>
-          <Card style={styles.metricCard}>
-            <Card.Title
-              title="Diet Complete"
-              subtitle="Today"
-              left={CardIcon('food-apple', palette.accentLime)}
-              titleStyle={[styles.metricTitle, { color: palette.textPrimary }]}
-              subtitleStyle={[styles.cardSubtitle, { color: palette.textMuted }]}
-            />
-            <Card.Content>
-              <Text style={[styles.metricValue, { color: palette.textPrimary }]}>{mealCompletionStats.completedAll}/{mealCompletionStats.totalStudents}</Text>
-              <Text style={[styles.metricCaption, { color: palette.textMuted }]}>Children completed all meals</Text>
-              <ProgressBar
-                progress={mealCompletionStats.percentage / 100}
-                color={palette.accentLime}
-                style={styles.progress}
-              />
-            </Card.Content>
-          </Card>
-          <Card style={styles.metricCard}>
-            <Card.Title
-              title="Screen"
-              subtitle="Today"
-              left={CardIcon('monitor', palette.accentCool)}
-              titleStyle={[styles.metricTitle, { color: palette.textPrimary }]}
-              subtitleStyle={[styles.cardSubtitle, { color: palette.textMuted }]}
-            />
-            <Card.Content>
-              <Text style={[styles.metricValue, { color: palette.textPrimary }]}>{screenUsage} min</Text>
-              <Text style={[styles.metricCaption, { color: palette.textMuted }]}>Limit {screenLimit} min</Text>
-              <ProgressBar
-                progress={screenProgress}
-                color={palette.accentCool}
-                style={styles.progress}
-              />
-            </Card.Content>
-          </Card>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.greeting, { color: palette.textPrimary }]}>
+              Hello, {profile?.name?.split(' ')[0] || 'User'}
+            </Text>
+            <Text style={[styles.date, { color: palette.textSecondary }]}>{todayLabel}</Text>
+          </View>
+          <View style={[styles.avatar, { backgroundColor: colors.meal.light }]}>
+            <MaterialCommunityIcons name="account" size={28} color={colors.meal.primary} />
+          </View>
         </View>
 
-        <Card style={styles.sectionCard}>
-          <Card.Title
-            title="Student Meals"
-            subtitle="Daily nutrition tracking"
-            titleStyle={[styles.cardTitle, { color: palette.textPrimary }]}
-            subtitleStyle={[styles.cardSubtitle, { color: palette.textMuted }]}
-          />
-          <Card.Content>
-            {studentMealData.length > 0 ? (
-              // Group meals by student
-              Object.values(
-                studentMealData.reduce((acc: any, meal) => {
-                  if (!acc[meal.studentId]) {
-                    acc[meal.studentId] = {
-                      studentId: meal.studentId,
-                      studentName: meal.studentName,
-                      studentAge: meal.studentAge,
-                      studentBMI: meal.studentBMI,
-                      meals: []
-                    };
-                  }
-                  acc[meal.studentId].meals.push(meal);
-                  return acc;
-                }, {})
-              ).map((studentData: any) => {
-                const isExpanded = expandedStudents.has(studentData.studentId);
-                return (
-                <View key={studentData.studentId} style={styles.studentMealSection}>
-                  <TouchableOpacity
-                    style={styles.studentHeader}
-                    onPress={() => toggleStudentExpansion(studentData.studentId)}>
-                    <View style={styles.studentHeaderContent}>
-                      <View style={styles.studentInfoRow}>
-                        <Text style={[styles.studentName, { color: palette.textPrimary }]}>
-                          👤 {studentData.studentName}
-                        </Text>
-                        <MaterialCommunityIcons 
-                          name={isExpanded ? "chevron-up" : "chevron-down"} 
-                          size={20} 
-                          color={palette.textMuted} 
-                        />
-                      </View>
-                      <Text style={[styles.studentDetails, { color: palette.textMuted }]}>
-                        Age: {studentData.studentAge} • BMI: {studentData.studentBMI.toFixed(1)}
-                      </Text>
-                      <Text style={[styles.viewDetailsText, { color: palette.accentWarm }]}>
-                        {isExpanded ? "Hide meals" : "View all meals"} {isExpanded ? "↑" : "↓"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                  
-                  {isExpanded && (
-                    <View style={styles.mealsList}>
-                      {studentData.meals.map((meal: any, index: number) => (
-                        <View key={`${meal.studentId}-${meal.mealType}`} style={styles.timelineRow}>
-                          <View style={[styles.timelineBullet, { backgroundColor: meal.consumed ? palette.accentLime : palette.bullet }]} />
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.timelineTitle, { color: palette.textPrimary }]}>
-                              {meal.mealEmoji} {meal.mealName}
-                            </Text>
-                            <Text style={[styles.timelineSubtitle, { color: palette.textMuted }]}>
-                              {meal.foodName} · {meal.calories} kcal · {meal.grams}g
-                            </Text>
-                            <Text style={[styles.timelineStatus, { color: meal.consumed ? palette.accentLime : palette.textMuted }]}>
-                              {meal.consumed ? '✅ Consumed' : '⏳ Pending'}
-                            </Text>
-                          </View>
-                          <Chip 
-                            compact 
-                            style={{ backgroundColor: palette.pillBg }}
-                            textStyle={{ fontSize: 11 }}>
-                            {meal.mealType}
-                          </Chip>
-                        </View>
-                      ))}
-                    </View>
-                  )}
+        {/* Family Overview Stats */}
+        <View style={[styles.familyCard, { backgroundColor: palette.surface }]}>
+          <View style={styles.familyHeader}>
+            <MaterialCommunityIcons name="account-group" size={24} color={palette.textSecondary} />
+            <Text style={[styles.familyTitle, { color: palette.textPrimary }]}>
+              {students.length} {students.length === 1 ? 'Child' : 'Children'}
+            </Text>
+          </View>
+          <Text style={[styles.familySubtitle, { color: palette.textSecondary }]}>
+            Daily targets across all children
+          </Text>
+        </View>
+
+        {/* Quick Stats - Modern Row Design */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statRow}>
+            <View style={[styles.statLeft, { backgroundColor: colors.meal.light }]}>
+              <MaterialCommunityIcons name="food-apple" size={22} color={colors.meal.primary} />
+            </View>
+            <View style={[styles.statCenter, { backgroundColor: colors.meal.surface }]}>
+              <Text style={[styles.statNumber, { color: colors.meal.dark }]}>{mealProgress.remaining}</Text>
+              <Text style={[styles.statText, { color: palette.textSecondary }]}>Meals</Text>
+            </View>
+            <View style={[styles.statRight, { backgroundColor: colors.meal.surface }]}>
+              <Text style={[styles.statUnit, { color: colors.meal.primary }]}>left</Text>
+            </View>
+          </View>
+          
+          <View style={styles.statRow}>
+            <View style={[styles.statLeft, { backgroundColor: colors.exercise.light }]}>
+              <MaterialCommunityIcons name="dumbbell" size={22} color={colors.exercise.primary} />
+            </View>
+            <View style={[styles.statCenter, { backgroundColor: colors.exercise.surface }]}>
+              <Text style={[styles.statNumber, { color: colors.exercise.dark }]}>{exerciseProgress.remaining}</Text>
+              <Text style={[styles.statText, { color: palette.textSecondary }]}>Exercises</Text>
+            </View>
+            <View style={[styles.statRight, { backgroundColor: colors.exercise.surface }]}>
+              <Text style={[styles.statUnit, { color: colors.exercise.primary }]}>left</Text>
+            </View>
+          </View>
+          
+          <View style={styles.statRow}>
+            <View style={[styles.statLeft, { backgroundColor: colors.screen.light }]}>
+              <MaterialCommunityIcons name="monitor" size={22} color={colors.screen.primary} />
+            </View>
+            <View style={[styles.statCenter, { backgroundColor: colors.screen.surface }]}>
+              <Text style={[styles.statNumber, { color: colors.screen.dark }]}>{screenProgress.remaining}</Text>
+              <Text style={[styles.statText, { color: palette.textSecondary }]}>Minutes</Text>
+            </View>
+            <View style={[styles.statRight, { backgroundColor: colors.screen.surface }]}>
+              <Text style={[styles.statUnit, { color: colors.screen.primary }]}>left</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Today's Family Progress - Professional Design */}
+        <View style={[styles.progressSection, { backgroundColor: palette.surface }]}>
+          <View style={styles.progressSectionHeader}>
+            <MaterialCommunityIcons name="chart-line" size={20} color={palette.textSecondary} />
+            <Text style={[styles.progressSectionTitle, { color: palette.textPrimary }]}>
+              Today's Progress
+            </Text>
+          </View>
+          
+          {/* Meal Progress */}
+          <View style={styles.progressItem}>
+            <View style={styles.progressItemHeader}>
+              <View style={styles.progressItemLeft}>
+                <View style={[styles.progressIconBg, { backgroundColor: colors.meal.light }]}>
+                  <MaterialCommunityIcons name="food-apple" size={18} color={colors.meal.primary} />
                 </View>
-                );
-              })
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={[styles.emptyStateText, { color: palette.textMuted }]}>
-                  No meal plans generated yet. Generate a meal plan from the Meals tab to see student nutrition data.
+                <Text style={[styles.progressItemLabel, { color: palette.textPrimary }]}>Meals</Text>
+              </View>
+              <View style={[styles.progressBadge, { backgroundColor: mealProgress.percentage === 100 ? colors.meal.light : '#f1f5f9' }]}>
+                <Text style={[styles.progressBadgeText, { color: mealProgress.percentage === 100 ? colors.meal.dark : palette.textSecondary }]}>
+                  {mealProgress.percentage}%
                 </Text>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
-
-        <Card style={styles.sectionCard}>
-          <Card.Title
-            title="Movement plan"
-            subtitle="Student exercise progress"
-            titleStyle={[styles.cardTitle, { color: palette.textPrimary }]}
-            subtitleStyle={[styles.cardSubtitle, { color: palette.textMuted }]}
-          />
-          <Card.Content>
-            {studentsWithPlans.length > 0 ? (
-              studentsWithPlans.map((student: Student) => {
-                const isExpanded = expandedExerciseStudents.has(student.id);
-                const today = new Date().toISOString().split('T')[0];
-                const todayExercises = currentExercisePlan?.exercises[today];
-                
-                return (
-                  <View key={student.id} style={styles.studentMealSection}>
-                    <TouchableOpacity
-                      style={styles.studentHeader}
-                      onPress={() => toggleExerciseExpansion(student.id)}>
-                      <View style={styles.studentHeaderContent}>
-                        <View style={styles.studentInfoRow}>
-                          <Text style={[styles.studentName, { color: palette.textPrimary }]}>
-                            🏃 {student.name}
-                          </Text>
-                          <MaterialCommunityIcons 
-                            name={isExpanded ? "chevron-up" : "chevron-down"} 
-                            size={20} 
-                            color={palette.textMuted} 
-                          />
-                        </View>
-                        <Text style={[styles.studentDetails, { color: palette.textMuted }]}>
-                          Age: {student.age} • BMI: {student.bmi.toFixed(1)}
-                        </Text>
-                        <View style={styles.exerciseSummary}>
-                          <Text style={[styles.viewDetailsText, { color: palette.accentWarm }]}>
-                            {isExpanded ? "Hide exercises" : "View all exercises"} {isExpanded ? "↑" : "↓"}
-                          </Text>
-                          <Text style={[styles.timelineStatus, { color: palette.textMuted }]}>
-                            {completedExercisePlans}/{totalExercisePlans} completed ({exercisePlanProgress}%)
-                          </Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                    
-                    {isExpanded && todayExercises && (
-                      <View style={styles.mealsList}>
-                        <View style={styles.exerciseSummary}>
-                          <View style={styles.stat}>
-                            <Text style={[styles.metricValue, { color: palette.textPrimary }]}>
-                              {completedExercisePlans}/{totalExercisePlans}
-                            </Text>
-                            <Text style={[styles.metricCaption, { color: palette.textMuted }]}>exercises completed</Text>
-                          </View>
-                          <View style={styles.stat}>
-                            <Text style={[styles.metricValue, { color: palette.textPrimary }]}>
-                              {exercisePlanProgress}%
-                            </Text>
-                            <Text style={[styles.metricCaption, { color: palette.textMuted }]}>daily progress</Text>
-                          </View>
-                        </View>
-                        <Divider style={styles.divider} />
-                        <ProgressBar
-                          progress={exercisePlanProgress / 100}
-                          color={palette.accentWarm}
-                          style={styles.progress}
-                        />
-                        
-                        {/* Individual Exercise Items */}
-                        <View style={styles.exerciseItemsList}>
-                          <View style={styles.timelineRow}>
-                            <View style={[styles.timelineBullet, { backgroundColor: todayExercises.completed.mobility ? palette.accentLime : palette.bullet }]} />
-                            <View style={{ flex: 1 }}>
-                              <Text style={[styles.timelineTitle, { color: palette.textPrimary }]}>
-                                🤸 Mobility
-                              </Text>
-                              <Text style={[styles.timelineSubtitle, { color: palette.textMuted }]}>
-                                {todayExercises.mobility.name} · {todayExercises.mobility.duration} min · {todayExercises.mobility.calories} kcal
-                              </Text>
-                              <Text style={[styles.timelineStatus, { color: todayExercises.completed.mobility ? palette.accentLime : palette.textMuted }]}>
-                                {todayExercises.completed.mobility ? '✅ Completed' : '⏳ Pending'}
-                              </Text>
-                            </View>
-                            <Chip 
-                              compact 
-                              style={{ backgroundColor: palette.pillBg }}
-                              textStyle={{ fontSize: 11 }}>
-                              {todayExercises.mobility.difficulty}
-                            </Chip>
-                          </View>
-                          
-                          <View style={styles.timelineRow}>
-                            <View style={[styles.timelineBullet, { backgroundColor: todayExercises.completed.strength ? palette.accentLime : palette.bullet }]} />
-                            <View style={{ flex: 1 }}>
-                              <Text style={[styles.timelineTitle, { color: palette.textPrimary }]}>
-                                💪 Strength
-                              </Text>
-                              <Text style={[styles.timelineSubtitle, { color: palette.textMuted }]}>
-                                {todayExercises.strength.name} · {todayExercises.strength.duration} min · {todayExercises.strength.calories} kcal
-                              </Text>
-                              <Text style={[styles.timelineStatus, { color: todayExercises.completed.strength ? palette.accentLime : palette.textMuted }]}>
-                                {todayExercises.completed.strength ? '✅ Completed' : '⏳ Pending'}
-                              </Text>
-                            </View>
-                            <Chip 
-                              compact 
-                              style={{ backgroundColor: palette.pillBg }}
-                              textStyle={{ fontSize: 11 }}>
-                              {todayExercises.strength.difficulty}
-                            </Chip>
-                          </View>
-                          
-                          <View style={styles.timelineRow}>
-                            <View style={[styles.timelineBullet, { backgroundColor: todayExercises.completed.cardio ? palette.accentLime : palette.bullet }]} />
-                            <View style={{ flex: 1 }}>
-                              <Text style={[styles.timelineTitle, { color: palette.textPrimary }]}>
-                                🏃 Cardio
-                              </Text>
-                              <Text style={[styles.timelineSubtitle, { color: palette.textMuted }]}>
-                                {todayExercises.cardio.name} · {todayExercises.cardio.duration} min · {todayExercises.cardio.calories} kcal
-                              </Text>
-                              <Text style={[styles.timelineStatus, { color: todayExercises.completed.cardio ? palette.accentLime : palette.textMuted }]}>
-                                {todayExercises.completed.cardio ? '✅ Completed' : '⏳ Pending'}
-                              </Text>
-                            </View>
-                            <Chip 
-                              compact 
-                              style={{ backgroundColor: palette.pillBg }}
-                              textStyle={{ fontSize: 11 }}>
-                              {todayExercises.cardio.difficulty}
-                            </Chip>
-                          </View>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                );
-              })
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={[styles.emptyStateText, { color: palette.textMuted }]}>
-                  No exercise plans generated yet. Select a student and generate a plan from the Exercise tab.
-                </Text>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
-
-        <Card style={styles.sectionCard}>
-          <Card.Title
-            title="Mindful screen use"
-            subtitle="7-day average"
-            titleStyle={[styles.cardTitle, { color: palette.textPrimary }]}
-            subtitleStyle={[styles.cardSubtitle, { color: palette.textMuted }]}
-          />
-          <Card.Content>
-            <View style={styles.screenRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.metricValue, { color: palette.textPrimary }]}>{weeklyAvgScreen} min</Text>
-                <Text style={[styles.metricCaption, { color: palette.textMuted }]}>avg daily use</Text>
-              </View>
-              <View>
-                <Text style={[styles.metricValue, { color: palette.textPrimary }]}>{screenLimit} min</Text>
-                <Text style={[styles.metricCaption, { color: palette.textMuted }]}>personal limit</Text>
               </View>
             </View>
-          </Card.Content>
-        </Card>
+            <View style={styles.progressBarContainer}>
+              <View style={[styles.progressBarBg, { backgroundColor: '#e2e8f0' }]}>
+                <View style={[styles.progressBarFill, { 
+                  backgroundColor: colors.meal.primary, 
+                  width: `${mealProgress.percentage}%` 
+                }]} />
+              </View>
+            </View>
+            <View style={styles.progressStats}>
+              <Text style={[styles.progressStatText, { color: palette.textSecondary }]}>
+                {mealProgress.completed}/{mealProgress.total} completed
+              </Text>
+              <Text style={[styles.progressStatText, { color: palette.textSecondary }]}>
+                {mealProgress.caloriesConsumed.toLocaleString()} cal
+              </Text>
+            </View>
+          </View>
+
+          {/* Exercise Progress */}
+          <View style={[styles.progressItem, styles.progressItemBorder, { borderTopColor: palette.border }]}>
+            <View style={styles.progressItemHeader}>
+              <View style={styles.progressItemLeft}>
+                <View style={[styles.progressIconBg, { backgroundColor: colors.exercise.light }]}>
+                  <MaterialCommunityIcons name="dumbbell" size={18} color={colors.exercise.primary} />
+                </View>
+                <Text style={[styles.progressItemLabel, { color: palette.textPrimary }]}>Exercise</Text>
+              </View>
+              <View style={[styles.progressBadge, { backgroundColor: exerciseProgress.percentage === 100 ? colors.exercise.light : '#f1f5f9' }]}>
+                <Text style={[styles.progressBadgeText, { color: exerciseProgress.percentage === 100 ? colors.exercise.dark : palette.textSecondary }]}>
+                  {exerciseProgress.percentage}%
+                </Text>
+              </View>
+            </View>
+            <View style={styles.progressBarContainer}>
+              <View style={[styles.progressBarBg, { backgroundColor: '#e2e8f0' }]}>
+                <View style={[styles.progressBarFill, { 
+                  backgroundColor: colors.exercise.primary, 
+                  width: `${exerciseProgress.percentage}%` 
+                }]} />
+              </View>
+            </View>
+            <View style={styles.progressStats}>
+              <Text style={[styles.progressStatText, { color: palette.textSecondary }]}>
+                {exerciseProgress.completed}/{exerciseProgress.total} workouts
+              </Text>
+              <Text style={[styles.progressStatText, { color: palette.textSecondary }]}>
+                {exerciseProgress.durationCompleted} min • {exerciseProgress.caloriesBurned} cal
+              </Text>
+            </View>
+          </View>
+
+          {/* Screen Time Progress */}
+          <View style={[styles.progressItem, styles.progressItemBorder, { borderTopColor: palette.border }]}>
+            <View style={styles.progressItemHeader}>
+              <View style={styles.progressItemLeft}>
+                <View style={[styles.progressIconBg, { backgroundColor: colors.screen.light }]}>
+                  <MaterialCommunityIcons name="monitor" size={18} color={colors.screen.primary} />
+                </View>
+                <Text style={[styles.progressItemLabel, { color: palette.textPrimary }]}>Screen Time</Text>
+              </View>
+              <View style={[styles.progressBadge, { 
+                backgroundColor: screenProgress.percentage > 0.8 ? '#fee2e2' : '#f1f5f9' 
+              }]}>
+                <Text style={[styles.progressBadgeText, { 
+                  color: screenProgress.percentage > 0.8 ? '#dc2626' : palette.textSecondary 
+                }]}>
+                  {Math.round(screenProgress.percentage * 100)}%
+                </Text>
+              </View>
+            </View>
+            <View style={styles.progressBarContainer}>
+              <View style={[styles.progressBarBg, { backgroundColor: '#e2e8f0' }]}>
+                <View style={[styles.progressBarFill, { 
+                  backgroundColor: screenProgress.percentage > 0.8 ? '#ef4444' : colors.screen.primary, 
+                  width: `${Math.min(screenProgress.percentage * 100, 100)}%` 
+                }]} />
+              </View>
+            </View>
+            <View style={styles.progressStats}>
+              <Text style={[styles.progressStatText, { color: palette.textSecondary }]}>
+                {screenProgress.used}/{screenProgress.limit} min used
+              </Text>
+              <Text style={[styles.progressStatText, { 
+                color: screenProgress.percentage > 0.8 ? '#ef4444' : palette.textSecondary 
+              }]}>
+                {screenProgress.remaining} min left
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Weekly Summary */}
+        <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>Weekly Family Summary</Text>
+        <View style={[styles.weeklyCard, { backgroundColor: palette.surface }]}>
+          <View style={styles.weeklyRow}>
+            <View style={styles.weeklyItem}>
+              <MaterialCommunityIcons name="food" size={20} color={colors.meal.primary} />
+              <Text style={[styles.weeklyValue, { color: palette.textPrimary }]}>{weeklyStats.mealDaysTracked}</Text>
+              <Text style={[styles.weeklyLabel, { color: palette.textSecondary }]}>Days Tracked</Text>
+            </View>
+            <View style={styles.weeklyDivider} />
+            <View style={styles.weeklyItem}>
+              <MaterialCommunityIcons name="fire" size={20} color={colors.meal.primary} />
+              <Text style={[styles.weeklyValue, { color: palette.textPrimary }]}>{weeklyStats.avgDailyCalories}</Text>
+              <Text style={[styles.weeklyLabel, { color: palette.textSecondary }]}>Avg Calories</Text>
+            </View>
+            <View style={styles.weeklyDivider} />
+            <View style={styles.weeklyItem}>
+              <MaterialCommunityIcons name="run" size={20} color={colors.exercise.primary} />
+              <Text style={[styles.weeklyValue, { color: palette.textPrimary }]}>{weeklyStats.avgExerciseMinutes}</Text>
+              <Text style={[styles.weeklyLabel, { color: palette.textSecondary }]}>Avg Minutes</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Students Section */}
+        {students.length > 0 && (
+          <>
+            <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>Per Child Details</Text>
+            
+            {students.map(student => {
+              const isExpanded = expandedStudents.has(student.id);
+              const todayMeals = getStudentTodayMeals(student.id);
+              const todayExercises = getStudentTodayExercises(student.id);
+              
+              // Calculate individual stats
+              const mealDone = todayMeals ? Object.values(todayMeals.consumed).filter(Boolean).length : 0;
+              const mealTotal = 4;
+              
+              // Handle both old and new exercise formats for per-child stats
+              let exerciseDone = 0;
+              let exerciseTotal = 3; // default for old format
+              if (todayExercises) {
+                const dayPlan = todayExercises as any;
+                if (dayPlan.exercises && Array.isArray(dayPlan.exercises)) {
+                  // New Shelter Home format
+                  exerciseTotal = dayPlan.exercises.length;
+                  exerciseDone = dayPlan.exercises.filter((ex: any) => ex.completed).length;
+                } else {
+                  // Old format
+                  exerciseDone = Object.values(todayExercises.completed || {}).filter(Boolean).length;
+                }
+              }
+              
+              return (
+                <Card key={student.id} style={[styles.studentCard, { backgroundColor: palette.surface }]}>
+                  <TouchableOpacity onPress={() => toggleStudentExpansion(student.id)} style={styles.studentHeader}>
+                    <View style={styles.studentMain}>
+                      <View style={[styles.studentAvatar, { backgroundColor: colors.meal.light }]}>
+                        <MaterialCommunityIcons name="account" size={24} color={colors.meal.primary} />
+                      </View>
+                      <View style={styles.studentInfo}>
+                        <Text style={[styles.studentName, { color: palette.textPrimary }]}>{student.name}</Text>
+                        <View style={styles.studentStatsRow}>
+                          <View style={styles.miniStat}>
+                            <MaterialCommunityIcons name="food-apple" size={14} color={mealDone === mealTotal ? colors.meal.primary : palette.textSecondary} />
+                            <Text style={[styles.miniStatText, { color: mealDone === mealTotal ? colors.meal.dark : palette.textSecondary }]}>
+                              {mealDone}/{mealTotal}
+                            </Text>
+                          </View>
+                          <View style={styles.miniStat}>
+                            <MaterialCommunityIcons name="dumbbell" size={14} color={exerciseDone === exerciseTotal ? colors.exercise.primary : palette.textSecondary} />
+                            <Text style={[styles.miniStatText, { color: exerciseDone === exerciseTotal ? colors.exercise.dark : palette.textSecondary }]}>
+                              {exerciseDone}/{exerciseTotal}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.arrowContainer}>
+                      <MaterialCommunityIcons 
+                        name={isExpanded ? "chevron-up" : "chevron-down"} 
+                        size={24} 
+                        color={palette.textSecondary} 
+                      />
+                    </View>
+                  </TouchableOpacity>
+
+                  {isExpanded && (
+                    <View style={styles.studentDetails}>
+                      {/* Meal Status */}
+                      {todayMeals && (
+                        <View style={styles.detailSection}>
+                          <View style={styles.detailHeader}>
+                            <MaterialCommunityIcons name="food-apple" size={18} color={colors.meal.primary} />
+                            <Text style={[styles.detailTitle, { color: colors.meal.dark }]}>Today's Meals</Text>
+                            <Text style={[styles.detailCount, { color: palette.textSecondary }]}>
+                              {mealDone}/{mealTotal} done
+                            </Text>
+                          </View>
+                          <View style={styles.mealGrid}>
+                            {[
+                              { key: 'breakfast', icon: 'coffee', label: 'Breakfast' },
+                              { key: 'lunch', icon: 'food', label: 'Lunch' },
+                              { key: 'dinner', icon: 'food-variant', label: 'Dinner' },
+                              { key: 'snack', icon: 'apple', label: 'Snack' },
+                            ].map(({ key, icon, label }) => (
+                              <View key={key} style={[
+                                styles.mealItem,
+                                todayMeals.consumed[key as keyof typeof todayMeals.consumed] && { backgroundColor: colors.meal.light }
+                              ]}>
+                                <MaterialCommunityIcons 
+                                  name={icon as any} 
+                                  size={20} 
+                                  color={todayMeals.consumed[key as keyof typeof todayMeals.consumed] ? colors.meal.primary : palette.textSecondary} 
+                                />
+                                <Text style={[
+                                  styles.mealLabel, 
+                                  { color: todayMeals.consumed[key as keyof typeof todayMeals.consumed] ? colors.meal.dark : palette.textSecondary }
+                                ]}>
+                                  {label}
+                                </Text>
+                                {todayMeals.consumed[key as keyof typeof todayMeals.consumed] && (
+                                  <MaterialCommunityIcons name="check-circle" size={14} color={colors.meal.primary} />
+                                )}
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+
+                      {/* Exercise Status */}
+                      {todayExercises && (
+                        <View style={styles.detailSection}>
+                          <View style={styles.detailHeader}>
+                            <MaterialCommunityIcons name="dumbbell" size={18} color={colors.exercise.primary} />
+                            <Text style={[styles.detailTitle, { color: colors.exercise.dark }]}>Today's Workout</Text>
+                            <Text style={[styles.detailCount, { color: palette.textSecondary }]}>
+                              {exerciseDone}/{exerciseTotal} done
+                            </Text>
+                          </View>
+                          <View style={styles.exerciseList}>
+                            {(todayExercises as any).exercises && Array.isArray((todayExercises as any).exercises) ? (
+                              // New Shelter Home format
+                              (todayExercises as any).exercises.map((exercise: any, index: number) => (
+                                <View key={exercise.id || index} style={[
+                                  styles.exerciseItem,
+                                  exercise.completed && { backgroundColor: colors.exercise.light }
+                                ]}>
+                                  <View style={styles.exerciseMain}>
+                                    <MaterialCommunityIcons 
+                                      name={exercise.category === 'cardio' ? 'run' : 
+                                            exercise.category === 'strength' ? 'dumbbell' : 
+                                            exercise.category === 'yoga' ? 'meditation' :
+                                            exercise.category === 'dance' ? 'music' :
+                                            exercise.category === 'warmup' ? 'run-fast' : 'yoga'} 
+                                      size={20} 
+                                      color={exercise.completed ? colors.exercise.primary : palette.textSecondary} 
+                                    />
+                                    <View>
+                                      <Text style={[
+                                        styles.exerciseName, 
+                                        { color: exercise.completed ? palette.textPrimary : palette.textSecondary }
+                                      ]}>
+                                        {exercise.name}
+                                      </Text>
+                                      <Text style={[styles.exerciseSub, { color: palette.textSecondary }]}>
+                                        {exercise.category} • {exercise.duration} min
+                                      </Text>
+                                    </View>
+                                  </View>
+                                  {exercise.completed && (
+                                    <MaterialCommunityIcons name="check-circle" size={20} color={colors.exercise.primary} />
+                                  )}
+                                </View>
+                              ))
+                            ) : (
+                              // Old format
+                              <>
+                                {[
+                                  { key: 'mobility', icon: 'yoga', label: 'Mobility', exercise: todayExercises.mobility },
+                                  { key: 'strength', icon: 'dumbbell', label: 'Strength', exercise: todayExercises.strength },
+                                  { key: 'cardio', icon: 'run', label: 'Cardio', exercise: todayExercises.cardio },
+                                ].map(({ key, icon, label, exercise }) => (
+                                  <View key={key} style={[
+                                    styles.exerciseItem,
+                                    todayExercises.completed[key as keyof typeof todayExercises.completed] && { backgroundColor: colors.exercise.light }
+                                  ]}>
+                                    <View style={styles.exerciseMain}>
+                                      <MaterialCommunityIcons 
+                                        name={icon as any} 
+                                        size={20} 
+                                        color={todayExercises.completed[key as keyof typeof todayExercises.completed] ? colors.exercise.primary : palette.textSecondary} 
+                                      />
+                                      <View>
+                                        <Text style={[
+                                          styles.exerciseName, 
+                                          { color: todayExercises.completed[key as keyof typeof todayExercises.completed] ? palette.textPrimary : palette.textSecondary }
+                                        ]}>
+                                          {label}
+                                        </Text>
+                                        <Text style={[styles.exerciseSub, { color: palette.textSecondary }]}>
+                                          {exercise?.name} • {exercise?.duration} min
+                                        </Text>
+                                      </View>
+                                    </View>
+                                    {todayExercises.completed[key as keyof typeof todayExercises.completed] && (
+                                      <MaterialCommunityIcons name="check-circle" size={20} color={colors.exercise.primary} />
+                                    )}
+                                  </View>
+                                ))}
+                              </>
+                            )}
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </Card>
+              );
+            })}
+          </>
+        )}
+
+        {students.length === 0 && (
+          <Card style={[styles.emptyCard, { backgroundColor: palette.surface }]}>
+            <MaterialCommunityIcons name="account-off" size={48} color={palette.textSecondary} />
+            <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
+              No children added yet. Go to the Children tab to add students.
+            </Text>
+          </Card>
+        )}
       </ScrollView>
     </View>
   );
 }
 
-const CardIcon =
-  (icon: string, color: string) =>
-  (props: { size?: number; color?: string }) =>
-    <MaterialCommunityIcons {...props} name={icon as any} size={20} color={color} />;
-
 const styles = StyleSheet.create({
-  screen: {
+  container: {
     flex: 1,
-    paddingHorizontal: 4,
-    position: 'relative',
   },
   scroll: {
-    paddingHorizontal: 4,
-    gap: 16,
-    position: 'relative',
-    zIndex: 1,
+    padding: 16,
   },
-  
-  // App header styles
-  appHeader: {
-    backgroundColor: 'white',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    position: 'absolute',
-    top: 0,
-    left: -4,
-    right: -4,
-    zIndex: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  appHeaderText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#1f2937',
-    textAlign: 'left',
-    letterSpacing: -0.5,
-    textTransform: 'uppercase',
-  },
-  
-  heroWrapper: {
-    borderRadius: 32,
-  },
-  heroCard: {
-    borderRadius: 32,
-    overflow: 'hidden',
-    elevation: 8,
-    backgroundColor: 'white',
-    shadowColor: '#ff006e',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  heroGradient: {
-    padding: 24,
-  },
-  heroHeader: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
   },
-  heroGreeting: {
-    fontSize: 20,
-    fontWeight: '600',
-    fontFamily: fonts.semibold,
-  },
-  heroSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: fonts.light,
-  },
-  heroMetaRow: {
-    flexDirection: 'row',
-    gap: 14,
-    marginTop: 16,
-  },
-  heroMetaCard: {
-    flex: 1,
-    borderRadius: 22,
-    padding: 16,
-    gap: 6,
-    minWidth: 0,
-  },
-  heroMetaLabel: {
-    fontSize: 12,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    lineHeight: 20,
-    fontFamily: fonts.light,
-  },
-  heroMetaValue: {
-    fontSize: 18,
-    fontWeight: '600',
+  greeting: {
+    fontSize: 28,
+    fontWeight: '700',
     fontFamily: fonts.bold,
   },
-  heroMetaValueSmall: {
-    fontSize: 16,
-    fontWeight: '500',
-    lineHeight: 20,
-    fontFamily: fonts.medium,
-  },
-  heroPill: {
+  date: {
+    fontSize: 14,
+    fontFamily: fonts.regular,
     marginTop: 4,
-    borderRadius: 999,
   },
-  heroProgressTrack: {
-    marginTop: 8,
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  heroProgressFill: {
-    height: '100%',
-    borderRadius: 999,
+  familyCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
   },
-  metricRow: {
+  familyHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  metricCard: {
-    flex: 1,
-    borderRadius: 24,
-    elevation: 4,
-    minWidth: 0,
-    paddingHorizontal: 4,
-    backgroundColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  metricTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    fontFamily: fonts.medium,
-    letterSpacing: 0,
-  },
-  cardTitle: {
+  familyTitle: {
     fontSize: 16,
     fontWeight: '600',
     fontFamily: fonts.semibold,
-    letterSpacing: -0.1,
   },
-  cardSubtitle: {
+  familySubtitle: {
     fontSize: 13,
-    fontFamily: fonts.light,
-    letterSpacing: 0.2,
+    fontFamily: fonts.regular,
+    marginTop: 4,
   },
-  metricValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 2,
+  statsContainer: {
+    gap: 10,
+    marginBottom: 24,
+  },
+  statRow: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  statLeft: {
+    width: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  statCenter: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  statRight: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingRight: 16,
+    paddingLeft: 8,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: '700',
     fontFamily: fonts.bold,
   },
-  metricCaption: {
-    marginTop: 1,
-    fontSize: 10,
-    fontFamily: fonts.light,
+  statText: {
+    fontSize: 14,
+    fontFamily: fonts.medium,
   },
-  progress: {
-    marginTop: 6,
-    height: 4,
-    borderRadius: 4,
+  statUnit: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  sectionCard: {
-    borderRadius: 24,
-    elevation: 4,
-    backgroundColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+  progressSection: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
   },
-  timelineRow: {
+  progressSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 20,
+  },
+  progressSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+  },
+  progressItem: {
+    paddingVertical: 16,
+  },
+  progressItemBorder: {
+    borderTopWidth: 1,
+  },
+  progressItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  progressItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 14,
   },
-  timelineBullet: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  progressIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  timelineTitle: {
+  progressItemLabel: {
     fontSize: 15,
     fontWeight: '600',
-    fontFamily: fonts.medium,
+    fontFamily: fonts.semibold,
   },
-  timelineSubtitle: {
-    fontSize: 12,
-    fontFamily: fonts.light,
-  },
-  exerciseSummary: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    gap: 16,
-  },
-  stat: {
-    alignItems: 'center',
-    minWidth: 80,
-  },
-  divider: {
-    marginVertical: 16,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  taskChip: {
-    borderRadius: 16,
-  },
-  studentInfo: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: 'rgba(0,0,0,0.02)',
-    borderRadius: 8,
-  },
-  timelineStatus: {
-    fontSize: 11,
-    fontFamily: fonts.medium,
-    marginTop: 4,
-  },
-  emptyState: {
-    padding: 20,
+  progressBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 48,
     alignItems: 'center',
   },
-  emptyStateText: {
+  progressBadgeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: fonts.bold,
+  },
+  progressBarContainer: {
+    marginBottom: 10,
+  },
+  progressBarBg: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressStatText: {
     fontSize: 13,
     fontFamily: fonts.regular,
-    textAlign: 'center',
-    lineHeight: 18,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  weeklyCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  weeklyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  weeklyItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  weeklyValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: fonts.bold,
+    marginTop: 4,
+  },
+  weeklyLabel: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    marginTop: 2,
+  },
+  weeklyDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#e2e8f0',
+  },
+  studentCard: {
+    marginBottom: 12,
+    borderRadius: 12,
+  },
+  studentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    paddingRight: 12,
+  },
+  studentMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    flexShrink: 1,
+  },
+  studentAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  studentInfo: {
+    flex: 1,
+    flexShrink: 1,
+  },
+  arrowContainer: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
   },
   studentName: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+  },
+  studentStatsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 4,
+  },
+  miniStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  miniStatText: {
+    fontSize: 12,
+    fontFamily: fonts.medium,
+  },
+  studentDetails: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  detailSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  detailTitle: {
     fontSize: 14,
     fontWeight: '600',
     fontFamily: fonts.semibold,
   },
-  studentDetails: {
+  detailCount: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    marginLeft: 'auto',
+  },
+  mealGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  mealItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  mealLabel: {
+    fontSize: 13,
+    fontFamily: fonts.medium,
+  },
+  exerciseList: {
+    gap: 10,
+  },
+  exerciseItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+  },
+  exerciseMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  exerciseName: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: fonts.medium,
+  },
+  exerciseSub: {
     fontSize: 12,
     fontFamily: fonts.regular,
     marginTop: 2,
   },
-  studentMealSection: {
-    marginBottom: 20,
-    backgroundColor: 'rgba(0,0,0,0.02)',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  studentHeader: {
-    padding: 16,
-    backgroundColor: 'rgba(0,0,0,0.04)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  studentHeaderContent: {
-    flex: 1,
-  },
-  studentInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  emptyCard: {
+    padding: 40,
     alignItems: 'center',
+    borderRadius: 12,
   },
-  mealsList: {
-    padding: 12,
-  },
-  exerciseItemsList: {
-    marginTop: 12,
-  },
-  viewDetailsText: {
-    fontSize: 13,
-    fontFamily: fonts.medium,
-    marginTop: 4,
-  },
-  moreMealsText: {
-    fontSize: 12,
+  emptyText: {
+    fontSize: 14,
     fontFamily: fonts.regular,
-    fontStyle: 'italic',
-    marginTop: 8,
     textAlign: 'center',
-  },
-  screenRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  floatingBackground: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 0,
-    backgroundColor: 'white',
-  },
-  floatingIcon: {
-    position: 'absolute',
-    zIndex: 0,
+    marginTop: 12,
   },
 });

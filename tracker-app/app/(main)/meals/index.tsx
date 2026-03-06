@@ -1,645 +1,538 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, TouchableOpacity, Alert } from 'react-native';
-import { Button, Card, Chip, IconButton, Text, TextInput, useTheme, Divider, ProgressBar, Checkbox } from 'react-native-paper';
-import { LineChart } from 'react-native-chart-kit';
-import { Dimensions } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, TouchableOpacity } from 'react-native';
+import { Button, Card, Text, useTheme, Checkbox, ProgressBar } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useAppSelector, useAppDispatch } from '@/hooks/redux';
 import type { RootState } from '@/src/store';
 import { 
-  createMealPlan,
-  updateMealConsumption as updateMealConsumptionFirebase,
-  subscribeToCurrentMealPlan
-} from '@/src/firebase/trackerApi';
+  createWeeklyMealPlan,
+  markMealCompleted,
+  subscribeToMealPlan,
+  type MealPlanPayload
+} from '@/src/firebase/mealPlanApi';
+import type { Student } from '@/types/tracker';
 import { 
-  setCurrentMealPlan,
-  addMealPlan,
-  updateMealConsumption
-} from '@/src/store/trackerSlice';
-import type { PortionUnit, Student, MealPlan, MealWithGrams } from '@/types/tracker';
-import AnimatedBackground from '@/components/AnimatedBackground';
-import { INDIAN_MEAL_LIBRARY, REGIONS, getMealsByRegionAndCategory, getBMISuggestedMeals, type MealLibraryItem } from '@/constants/mealLibrary';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-
-const SCREEN_WIDTH = Dimensions.get('window').width - 40;
-
-// BMI-based calorie calculation and meal generation functions
-const calculateBMI = (height: number, weight: number): number => {
-  const heightInMeters = height / 100;
-  return weight / (heightInMeters * heightInMeters);
-};
-
-const getBMICategory = (bmi: number): string => {
-  if (bmi < 18.5) return 'Underweight';
-  if (bmi < 25) return 'Normal';
-  if (bmi < 30) return 'Overweight';
-  return 'Obese';
-};
-
-const getDietType = (bmi: number): string => {
-  if (bmi < 18.5) return 'High-Calorie Diet';
-  if (bmi < 25) return 'Balanced Diet';
-  if (bmi < 30) return 'Low-Calorie Diet';
-  return 'Weight Loss Diet';
-};
-
-const calculateDailyCalorieNeeds = (age: number, gender: string = 'male', bmi: number): number => {
-  let baseCalories = 0;
-  
-  // Base calories by age
-  if (age >= 8 && age <= 9) baseCalories = 1600;
-  else if (age >= 10 && age <= 11) baseCalories = 1800;
-  else if (age >= 12 && age <= 13) baseCalories = 2000;
-  else if (age >= 14 && age <= 15) baseCalories = 2200;
-  else if (age >= 16 && age <= 18) baseCalories = 2400;
-  else baseCalories = 2000;
-  
-  // Adjust based on BMI
-  if (bmi < 18.5) return baseCalories + 300; // Underweight needs more calories
-  if (bmi < 25) return baseCalories; // Normal weight
-  if (bmi < 30) return baseCalories - 200; // Overweight needs fewer calories
-  return baseCalories - 400; // Obese needs significant calorie reduction
-};
-
-const generateStudentMealPlan = (student: Student): MealPlan => {
-  const today = new Date();
-  const mealPlan: MealPlan = {
-    id: `plan-${student.id}-${today.getTime()}`,
-    studentId: student.id,
-    weekStartDate: today.toISOString().split('T')[0],
-    meals: {},
-    createdAt: today.toISOString()
-  };
-
-  // Filter meals suitable for student's calorie needs
-  const maxMealCalories = student.dailyCalorieNeeds / 4; // Max 25% of daily calories per meal
-  const suitableMeals = INDIAN_MEAL_LIBRARY.filter(meal => meal.calories <= maxMealCalories);
-  
-  const breakfastMeals = suitableMeals.filter(m => m.category === 'breakfast');
-  const lunchMeals = suitableMeals.filter(m => m.category === 'lunch');
-  const dinnerMeals = suitableMeals.filter(m => m.category === 'dinner');
-  const snackMeals = suitableMeals.filter(m => m.category === 'snack');
-
-  const getRandomMeal = (mealArray: MealLibraryItem[]) => {
-    return mealArray[Math.floor(Math.random() * mealArray.length)];
-  };
-
-  // Generate meals for next 7 days
-  for (let i = 0; i < 7; i++) {
-    const currentDate = new Date(today);
-    currentDate.setDate(today.getDate() + i);
-    const dateStr = currentDate.toISOString().split('T')[0];
-    
-    const breakfast = getRandomMeal(breakfastMeals.length > 0 ? breakfastMeals : suitableMeals);
-    const lunch = getRandomMeal(lunchMeals.length > 0 ? lunchMeals : suitableMeals);
-    const dinner = getRandomMeal(dinnerMeals.length > 0 ? dinnerMeals : suitableMeals);
-    const snack = getRandomMeal(snackMeals.length > 0 ? snackMeals : suitableMeals);
-    
-    const totalCalories = breakfast.calories + lunch.calories + dinner.calories + snack.calories;
-    
-    // Calculate grams for each meal based on calorie density
-    const breakfastGrams = Math.round(breakfast.calories * 0.25);
-    const lunchGrams = Math.round(lunch.calories * 0.3);
-    const dinnerGrams = Math.round(dinner.calories * 0.35);
-    const snackGrams = Math.round(snack.calories * 0.2);
-    const totalGrams = breakfastGrams + lunchGrams + dinnerGrams + snackGrams;
-    
-    mealPlan.meals[dateStr] = {
-      breakfast: { ...breakfast, grams: breakfastGrams },
-      lunch: { ...lunch, grams: lunchGrams },
-      dinner: { ...dinner, grams: dinnerGrams },
-      snack: { ...snack, grams: snackGrams },
-      totalCalories,
-      totalGrams,
-      consumed: {
-        breakfast: false,
-        lunch: false,
-        dinner: false,
-        snack: false
-      }
-    };
-  }
-
-  return mealPlan;
-};
+  SHELTER_HOME_WEEKLY_MENU, 
+  getPortionGuidelinesByAge,
+  calculateDailyNutrition,
+  getTodayRegionalMealPlan,
+  getRegionalMealPlan,
+  REGION_OPTIONS,
+  type DailyMealPlan,
+  type DishCombination,
+  type PortionGuideline,
+  type Region
+} from '@/src/constants/shelterHomeMealPlan';
 
 const fonts = {
-  light: 'WorkSans_300Light',
   regular: 'WorkSans_400Regular',
   medium: 'WorkSans_500Medium',
   semibold: 'WorkSans_600SemiBold',
   bold: 'WorkSans_700Bold',
 } as const;
 
+// Green theme for meals
+const mealColors = {
+  primary: '#16a34a',
+  primaryLight: '#dcfce7',
+  primaryDark: '#15803d',
+  accent: '#22c55e',
+  surface: '#f0fdf4',
+};
+
 export default function MealsScreen() {
   const theme = useTheme();
-  const dispatch = useAppDispatch();
   const { user } = useAppSelector((state: RootState) => state.auth);
   const { students } = useAppSelector((state: RootState) => state.tracker);
 
-  // Meal plan states
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [currentMealPlan, setCurrentMealPlan] = useState<MealPlan | null>(null);
+  const [currentMealPlan, setCurrentMealPlanState] = useState<MealPlanPayload | null>(null);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [showPortionGuide, setShowPortionGuide] = useState(false);
 
-  const createPalette = (isDark: boolean) => ({
-    textPrimary: isDark ? '#E9FFF7' : '#0f172a',
-    textMuted: isDark ? 'rgba(233,255,247,0.7)' : '#475569',
-    background: isDark ? '#0f172a' : '#f8fafc',
-    surface: isDark ? '#1e293b' : '#ffffff',
-    cardBg: isDark ? '#1e293b' : '#ffffff',
-    cardBorder: isDark ? '#334155' : '#e2e8f0',
-    chipBg: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.05)',
-    inputBg: isDark ? '#334155' : '#ffffff',
-    accent: '#10b981',
-  });
+  const palette = useMemo(() => ({
+    background: theme.dark ? '#0f172a' : '#f8fafc',
+    surface: theme.dark ? '#1e293b' : '#ffffff',
+    textPrimary: theme.dark ? '#f1f5f9' : '#1e293b',
+    textSecondary: theme.dark ? '#94a3b8' : '#64748b',
+    border: theme.dark ? '#334155' : '#e2e8f0',
+    accent: mealColors.primary,
+    accentLight: mealColors.primaryLight,
+    success: '#16a34a',
+    error: '#ef4444',
+  }), [theme.dark]);
 
-  const palette = useMemo(() => createPalette(theme.dark), [theme.dark]);
-
-  // Load current meal plan when student is selected
   useEffect(() => {
     if (!user?.uid || !selectedStudent) return;
 
-    const unsubscribe = subscribeToCurrentMealPlan(user.uid, selectedStudent.id, (mealPlan) => {
-      setCurrentMealPlan(mealPlan);
+    const unsubscribe = subscribeToMealPlan(user.uid, selectedStudent.id, (mealPlan) => {
+      setCurrentMealPlanState(mealPlan);
     });
 
     return () => unsubscribe();
   }, [user?.uid, selectedStudent?.id]);
 
+  const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
   const handleGenerateMealPlan = async () => {
     if (!selectedStudent) {
-      setError('Please select a student first.');
+      showMessage('Please select a student first.', 'error');
       return;
     }
 
     if (!user?.uid) {
-      setError('❌ User not authenticated');
+      showMessage('User not authenticated', 'error');
       return;
     }
 
     try {
-      const newMealPlan = generateStudentMealPlan(selectedStudent);
-      const mealPlanPayload: Omit<MealPlan, 'id'> = {
-        studentId: newMealPlan.studentId,
-        weekStartDate: newMealPlan.weekStartDate,
-        meals: newMealPlan.meals,
-        createdAt: newMealPlan.createdAt
-      };
-
-      const createdPlanId = await createMealPlan(user.uid, mealPlanPayload);
+      const result = await createWeeklyMealPlan(
+        user.uid,
+        selectedStudent.id,
+        selectedStudent.name,
+        selectedStudent.age,
+        selectedStudent.region || 'kolkata'
+      );
       
-      // Update Redux state with the new meal plan
-      if (createdPlanId) {
-        const completeMealPlan: MealPlan = {
-          id: createdPlanId,
-          ...mealPlanPayload
-        };
-        
-        try {
-          // Use manual action creation to bypass Redux Toolkit issue
-          const currentMealPlanAction = { type: 'tracker/setCurrentMealPlan', payload: completeMealPlan };
-          const addMealPlanAction = { type: 'tracker/addMealPlan', payload: completeMealPlan };
-          
-          dispatch(currentMealPlanAction);
-          dispatch(addMealPlanAction);
-        } catch (dispatchError) {
-          console.error('Redux dispatch error:', dispatchError);
-        }
+      if (result.success) {
+        showMessage(`${selectedStudent.region === 'delhi' ? 'Delhi' : 'Kolkata'} meal plan created for ${selectedStudent.name}`);
+      } else {
+        showMessage('Failed to create meal plan', 'error');
       }
-      
-      setError(`✅ 7-day meal plan generated for ${selectedStudent.name}!`);
-      setTimeout(() => setError(null), 3000);
     } catch (error) {
       console.error('Error generating meal plan:', error);
-      setError('❌ Failed to generate meal plan. Please try again.');
-      setTimeout(() => setError(null), 3000);
+      showMessage('Failed to generate meal plan', 'error');
     }
   };
 
   const handleMarkMealCompleted = async (date: string, mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack') => {
-    if (!currentMealPlan) return;
+    if (!selectedStudent) return;
 
     if (!user?.uid) {
-      setError('❌ User not authenticated');
+      showMessage('User not authenticated', 'error');
       return;
     }
 
     try {
-      await updateMealConsumptionFirebase(user.uid, currentMealPlan.id, date, mealType);
-      
-      // Update Redux state to reflect the meal completion
-      try {
-        // Use manual action creation to bypass Redux Toolkit issue
-        const updateMealConsumptionAction = { 
-          type: 'tracker/updateMealConsumption', 
-          payload: { date, mealType } 
-        };
-        
-        dispatch(updateMealConsumptionAction);
-        
-        // Also update the mealPlans array
-        const mealPlansAction = { 
-          type: 'tracker/updateMealPlan', 
-          payload: currentMealPlan 
-        };
-        dispatch(mealPlansAction);
-        
-      } catch (dispatchError) {
-        console.error('Redux dispatch error:', dispatchError);
-      }
-      
-      setError(`✅ ${mealType.charAt(0).toUpperCase() + mealType.slice(1)} marked as completed!`);
-      setTimeout(() => setError(null), 2000);
+      const currentStatus = currentMealPlan?.completedMeals?.[date]?.[mealType] || false;
+      await markMealCompleted(user.uid, selectedStudent.id, date, mealType, !currentStatus);
+      showMessage(`${mealType.charAt(0).toUpperCase() + mealType.slice(1)} ${!currentStatus ? 'marked as completed' : 'marked as pending'}`);
     } catch (error) {
-      console.error('Error marking meal as completed:', error);
-      setError('❌ Failed to mark meal as completed. Please try again.');
-      setTimeout(() => setError(null), 2000);
+      console.error('Error marking meal:', error);
+      showMessage('Failed to update meal status', 'error');
     }
   };
 
-  const handleDownloadPDF = async () => {
-    if (!currentMealPlan || !selectedStudent) {
-      setError('Please generate a meal plan first.');
-      return;
-    }
+  // Get today's day name
+  const today = new Date();
+  const todayDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][today.getDay()];
+  const todayDateStr = today.toISOString().split('T')[0];
+  
+  // Get today's meal plan from weekly menu
+  const todayMealPlan = currentMealPlan?.weeklyMenu?.find((day: DailyMealPlan) => day.day === todayDayName);
+  const todayCompleted = currentMealPlan?.completedMeals?.[todayDateStr];
+  
+  const todayProgress = todayMealPlan ? {
+    completed: todayCompleted ? Object.values(todayCompleted).filter(Boolean).length : 0,
+    total: 4,
+    calories: calculateDailyNutrition(todayMealPlan).totalCalories,
+  } : null;
 
-    try {
-      // Generate HTML for PDF
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <title>7-Day Meal Plan - ${selectedStudent.name}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #10b981; padding-bottom: 20px; }
-            .header h1 { color: #10b981; margin: 0; }
-            .header p { margin: 5px 0; color: #666; }
-            .student-info { background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-            .day-section { margin-bottom: 25px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-            .day-header { background: #10b981; color: white; padding: 12px; font-weight: bold; font-size: 18px; }
-            .meal-table { width: 100%; border-collapse: collapse; }
-            .meal-table th { background: #f1f5f9; padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-            .meal-table td { padding: 10px; border-bottom: 1px solid #f1f5f9; }
-            .meal-table tr:last-child td { border-bottom: none; }
-            .calories { font-weight: bold; color: #10b981; }
-            .total-row { background: #f8fafc; font-weight: bold; }
-            .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>🍽️ 7-Day Meal Plan</h1>
-            <p>Generated on ${new Date().toLocaleDateString()}</p>
-          </div>
-          
-          <div class="student-info">
-            <strong>Student:</strong> ${selectedStudent.name}<br>
-            <strong>Age:</strong> ${selectedStudent.age} years<br>
-            <strong>Height:</strong> ${selectedStudent.height} cm<br>
-            <strong>Weight:</strong> ${selectedStudent.weight} kg<br>
-            <strong>Daily Calorie Target:</strong> ${selectedStudent.dailyCalorieNeeds} calories
-          </div>
-          
-          ${Object.entries(currentMealPlan.meals).map(([date, dayMeals]) => {
-            const dateObj = new Date(date);
-            const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
-            const dateStr = dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-            
-            return `
-              <div class="day-section">
-                <div class="day-header">${dayName} - ${dateStr}</div>
-                <table class="meal-table">
-                  <thead>
-                    <tr>
-                      <th>Meal</th>
-                      <th>Food Item</th>
-                      <th>Calories</th>
-                      <th>Portion (g)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>🌅 Breakfast</td>
-                      <td>${dayMeals.breakfast.name}</td>
-                      <td class="calories">${dayMeals.breakfast.calories}</td>
-                      <td>${dayMeals.breakfast.grams}g</td>
-                    </tr>
-                    <tr>
-                      <td>☀️ Lunch</td>
-                      <td>${dayMeals.lunch.name}</td>
-                      <td class="calories">${dayMeals.lunch.calories}</td>
-                      <td>${dayMeals.lunch.grams}g</td>
-                    </tr>
-                    <tr>
-                      <td>🌆 Dinner</td>
-                      <td>${dayMeals.dinner.name}</td>
-                      <td class="calories">${dayMeals.dinner.calories}</td>
-                      <td>${dayMeals.dinner.grams}g</td>
-                    </tr>
-                    <tr>
-                      <td>🍎 Snack</td>
-                      <td>${dayMeals.snack.name}</td>
-                      <td class="calories">${dayMeals.snack.calories}</td>
-                      <td>${dayMeals.snack.grams}g</td>
-                    </tr>
-                    <tr class="total-row">
-                      <td colspan="2"><strong>Daily Total</strong></td>
-                      <td class="calories"><strong>${dayMeals.totalCalories}</strong></td>
-                      <td><strong>${dayMeals.totalGrams}g</strong></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            `;
-          }).join('')}
-          
-          <div class="footer">
-            <p>This meal plan is generated based on the student's BMI and daily calorie requirements.</p>
-            <p>Consult with a nutritionist for personalized dietary advice.</p>
-          </div>
-        </body>
-        </html>
-      `;
-
-      // Generate PDF
-      const { uri } = await Print.printToFileAsync({
-        html: htmlContent,
-        base64: false,
-      });
-
-      // Share the PDF
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: 'Share Meal Plan PDF',
-          UTI: 'com.adobe.pdf',
+  // Calculate weekly stats
+  const weeklyStats = useMemo(() => {
+    if (!currentMealPlan?.weeklyMenu) return null;
+    
+    let totalCalories = 0;
+    let completedMeals = 0;
+    let totalMeals = 0;
+    
+    currentMealPlan.weeklyMenu.forEach((dayPlan: DailyMealPlan) => {
+      const nutrition = calculateDailyNutrition(dayPlan);
+      totalCalories += nutrition.totalCalories;
+      totalMeals += 4;
+    });
+    
+    // Count completed meals from completedMeals record
+    if (currentMealPlan.completedMeals) {
+      Object.values(currentMealPlan.completedMeals).forEach((day: Record<string, boolean>) => {
+        Object.values(day).forEach((completed: boolean) => {
+          if (completed) completedMeals++;
         });
-      } else {
-        setError('❌ Sharing is not available on this device');
-        setTimeout(() => setError(null), 3000);
-      }
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      setError('❌ Failed to generate PDF. Please try again.');
-      setTimeout(() => setError(null), 3000);
+      });
     }
-  };
+    
+    return {
+      avgCalories: Math.round(totalCalories / 7),
+      completedMeals,
+      totalMeals,
+      progress: totalMeals > 0 ? Math.round((completedMeals / totalMeals) * 100) : 0,
+    };
+  }, [currentMealPlan]);
+
+  // Get portion guidelines for selected student
+  const portionGuidelines = selectedStudent ? getPortionGuidelinesByAge(selectedStudent.age) : null;
 
   return (
-    <View style={[styles.flex, { backgroundColor: palette.background }]}>
-      <AnimatedBackground />
-      <KeyboardAvoidingView
-        style={[styles.flex, { backgroundColor: 'transparent' }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingBottom: 60 }]}
-          showsVerticalScrollIndicator={false}>
+    <View style={[styles.container, { backgroundColor: palette.background }]}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           
-          {/* App Header Bar */}
-          <View style={styles.appHeader}>
-            <Text style={styles.appHeaderText}>Healthify</Text>
-          </View>
-
-          <Text style={styles.title}>
-            🍽️ Meal Planner
-          </Text>
-
-          <Card style={[styles.card, { backgroundColor: palette.surface }]}>
-            <Card.Content style={styles.cardContent}>
-
-              {/* Student Selection */}
-              <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>
-                👤 Select Student
+          {/* Header */}
+          <View style={[styles.header, { backgroundColor: mealColors.surface }]}>
+            <View style={styles.headerIcon}>
+              <MaterialCommunityIcons name="food-apple" size={32} color={mealColors.primary} />
+            </View>
+            <View>
+              <Text style={[styles.headerTitle, { color: mealColors.primaryDark }]}>Meal Planning</Text>
+              <Text style={[styles.headerSubtitle, { color: palette.textSecondary }]}>
+                Shelter Home Nutrition Program
               </Text>
-              {students.length === 0 ? (
-                <Text style={[styles.emptyStateText, { color: palette.textMuted }]}>
-                  No students available. Please add students from the Children tab first.
+            </View>
+          </View>
+          
+          {message && (
+            <View style={[styles.messageBanner, { backgroundColor: message.type === 'success' ? mealColors.primaryLight : '#fef2f2' }]}>
+              <MaterialCommunityIcons 
+                name={message.type === 'success' ? 'check-circle' : 'alert-circle'} 
+                size={20} 
+                color={message.type === 'success' ? mealColors.primary : palette.error} 
+              />
+              <Text style={[styles.messageText, { color: message.type === 'success' ? mealColors.primaryDark : palette.error }]}>
+                {message.text}
+              </Text>
+            </View>
+          )}
+
+          {/* Student Selection */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: palette.textSecondary }]}>Select Student</Text>
+            
+            {students.length === 0 ? (
+              <View style={[styles.emptyCard, { backgroundColor: palette.surface }]}>
+                <MaterialCommunityIcons name="account-off" size={48} color={palette.textSecondary} />
+                <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
+                  No students available. Add students from the Children tab.
                 </Text>
-              ) : (
-                students.map((student: Student) => (
+              </View>
+            ) : (
+              <View style={styles.studentList}>
+                {students.map((student) => (
                   <TouchableOpacity
                     key={student.id}
                     style={[
-                      styles.studentOption,
-                      {
-                        backgroundColor: selectedStudent?.id === student.id ? palette.accent + '20' : palette.inputBg,
-                        borderColor: selectedStudent?.id === student.id ? palette.accent : palette.cardBorder,
-                        borderWidth: 1
-                      }
+                      styles.studentItem,
+                      { borderColor: palette.border, backgroundColor: palette.surface },
+                      selectedStudent?.id === student.id && [styles.studentItemSelected, { borderColor: mealColors.primary, backgroundColor: mealColors.surface }],
                     ]}
                     onPress={() => setSelectedStudent(student)}>
-                    <View style={styles.studentOptionHeader}>
-                      <Text style={[styles.studentOptionText, { color: palette.textPrimary, flex: 1 }]}>
+                    <View style={styles.studentIcon}>
+                      <MaterialCommunityIcons name="account-circle" size={40} color={selectedStudent?.id === student.id ? mealColors.primary : palette.textSecondary} />
+                    </View>
+                    <View style={styles.studentInfo}>
+                      <Text style={[styles.studentName, { color: palette.textPrimary }]}>
                         {student.name}
                       </Text>
-                      {selectedStudent?.id === student.id && (
-                        <Text style={[styles.selectedText, { color: palette.accent }]}>✓ Selected</Text>
-                      )}
-                    </View>
-                    <View style={styles.studentOptionDetails}>
-                      <Text style={[styles.studentOptionDetailText, { color: palette.textMuted }]}>
-                        Age: {student.age}
-                      </Text>
-                      <Text style={[styles.studentOptionDetailText, { color: palette.textMuted }]}>
-                        BMI: {student.bmi.toFixed(1)}
+                      <Text style={[styles.studentMeta, { color: palette.textSecondary }]}>
+                        Age {student.age} • {student.weight}kg • BMI {student.bmi.toFixed(1)} • {student.region === 'delhi' ? 'Delhi' : 'Kolkata'}
                       </Text>
                     </View>
+                    {selectedStudent?.id === student.id && (
+                      <MaterialCommunityIcons name="check-circle" size={24} color={mealColors.primary} />
+                    )}
                   </TouchableOpacity>
-                ))
-              )}
+                ))}
+              </View>
+            )}
+          </View>
 
-              {/* Generate Meal Plan Button */}
-              {selectedStudent && (
-                <TouchableOpacity
-                  style={[styles.addChildButton, { backgroundColor: palette.accent, marginBottom: 16 }]}
-                  onPress={handleGenerateMealPlan}>
-                  <Text style={styles.addChildText}>🍽️ Generate 7-Day Meal Plan</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Download PDF Button */}
-              {selectedStudent && currentMealPlan && (
-                <TouchableOpacity
-                  style={[styles.addChildButton, { backgroundColor: '#3b82f6', marginBottom: 16 }]}
-                  onPress={handleDownloadPDF}>
-                  <Text style={styles.addChildText}>📄 Download Meal Plan PDF</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Error Message */}
-              {error && (
-                <Card style={[styles.errorCard, { backgroundColor: '#fef2f2', borderColor: '#fecaca', borderWidth: 1 }]}>
-                  <Text style={[styles.errorText, { color: '#dc2626' }]}>{error}</Text>
-                </Card>
-              )}
-
-              {/* Meal Plan Display */}
-              {!selectedStudent ? (
-                <Card style={[styles.emptyStateCard, { backgroundColor: palette.cardBg, borderColor: palette.cardBorder, borderWidth: 1 }]}>
-                  <Text style={[styles.emptyStateText, { color: palette.textMuted }]}>
-                    Please select a student to generate meal plans.
+          {/* Portion Guidelines Card */}
+          {selectedStudent && portionGuidelines && (
+            <Card style={[styles.portionCard, { backgroundColor: palette.surface, borderColor: mealColors.primary }]}>
+              <TouchableOpacity onPress={() => setShowPortionGuide(!showPortionGuide)}>
+                <View style={styles.portionHeader}>
+                  <MaterialCommunityIcons name="information" size={20} color={mealColors.primary} />
+                  <Text style={[styles.portionTitle, { color: mealColors.primaryDark }]}>
+                    Portion Guidelines ({portionGuidelines.ageRange})
                   </Text>
-                </Card>
-              ) : !currentMealPlan ? (
-                <Card style={[styles.emptyStateCard, { backgroundColor: palette.cardBg, borderColor: palette.cardBorder, borderWidth: 1 }]}>
-                  <Text style={[styles.emptyStateText, { color: palette.textMuted }]}>
-                    No meal plan generated yet. Tap "Generate 7-Day Meal Plan" to create a personalized plan for {selectedStudent.name}.
-                  </Text>
-                </Card>
-              ) : (
-                <View style={styles.recommendationsContainer}>
-                  <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>
-                    🍽️ 7-Day Meal Plan for {selectedStudent.name}
-                  </Text>
-                  
-                  {Object.entries(currentMealPlan.meals).map(([date, dayMeals]) => {
-                    const dateObj = new Date(date);
-                    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
-                    const dateStr = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    const isToday = date === new Date().toISOString().split('T')[0];
-                    
-                    return (
-                      <Card
-                        key={date}
-                        style={[
-                          styles.dayCard,
-                          { 
-                            borderColor: palette.cardBorder, 
-                            borderWidth: 1,
-                            backgroundColor: isToday ? '#fef3c7' : palette.cardBg
-                          }
-                        ]}>
-                        <Card.Content>
-                          <TouchableOpacity
-                            onPress={() => setExpandedDay(expandedDay === date ? null : date)}>
-                            <View style={styles.dayHeader}>
-                              <View>
-                                <Text style={[styles.dayTitle, { color: palette.textPrimary }]}>
-                                  {dayName}
-                                </Text>
-                                <Text style={[styles.dayDate, { color: palette.textMuted }]}>
-                                  {dateStr}
-                                </Text>
-                              </View>
-                              <View style={styles.dayStats}>
-                                <Text style={[styles.dayStat, { color: palette.textMuted }]}>
-                                  🔥 {dayMeals.totalCalories} cal
-                                </Text>
-                                <Text style={[styles.dayStat, { color: palette.textMuted }]}>
-                                  ⚖️ {dayMeals.totalGrams}g
-                                </Text>
-                              </View>
-                            </View>
-                          </TouchableOpacity>
-
-                          {expandedDay === date && (
-                            <View style={styles.mealsList}>
-                              {/* Breakfast */}
-                              <View style={styles.mealItem}>
-                                <View style={styles.mealHeader}>
-                                  <Text style={[styles.mealName, { color: palette.textPrimary }]}>
-                                    🌅 Breakfast
-                                  </Text>
-                                  <Checkbox
-                                    status={dayMeals.consumed.breakfast ? 'checked' : 'unchecked'}
-                                    onPress={() => handleMarkMealCompleted(date, 'breakfast')}
-                                    color={palette.accent}
-                                  />
-                                </View>
-                                <Text style={[styles.mealDetails, { color: palette.textPrimary }]}>
-                                  {dayMeals.breakfast.name}
-                                </Text>
-                                <Text style={[styles.mealDetails, { color: palette.textMuted }]}>
-                                  🔥 {dayMeals.breakfast.calories} cal
-                                </Text>
-                                <Text style={[styles.mealDetails, { color: palette.textMuted }]}>
-                                  ⚖️ {dayMeals.breakfast.grams}g
-                                </Text>
-                              </View>
-
-                              {/* Lunch */}
-                              <View style={styles.mealItem}>
-                                <View style={styles.mealHeader}>
-                                  <Text style={[styles.mealName, { color: palette.textPrimary }]}>
-                                    ☀️ Lunch
-                                  </Text>
-                                  <Checkbox
-                                    status={dayMeals.consumed.lunch ? 'checked' : 'unchecked'}
-                                    onPress={() => handleMarkMealCompleted(date, 'lunch')}
-                                    color={palette.accent}
-                                  />
-                                </View>
-                                <Text style={[styles.mealDetails, { color: palette.textPrimary }]}>
-                                  {dayMeals.lunch.name}
-                                </Text>
-                                <Text style={[styles.mealDetails, { color: palette.textMuted }]}>
-                                  🔥 {dayMeals.lunch.calories} cal
-                                </Text>
-                                <Text style={[styles.mealDetails, { color: palette.textMuted }]}>
-                                  ⚖️ {dayMeals.lunch.grams}g
-                                </Text>
-                              </View>
-
-                              {/* Dinner */}
-                              <View style={styles.mealItem}>
-                                <View style={styles.mealHeader}>
-                                  <Text style={[styles.mealName, { color: palette.textPrimary }]}>
-                                    🌆 Dinner
-                                  </Text>
-                                  <Checkbox
-                                    status={dayMeals.consumed.dinner ? 'checked' : 'unchecked'}
-                                    onPress={() => handleMarkMealCompleted(date, 'dinner')}
-                                    color={palette.accent}
-                                  />
-                                </View>
-                                <Text style={[styles.mealDetails, { color: palette.textPrimary }]}>
-                                  {dayMeals.dinner.name}
-                                </Text>
-                                <Text style={[styles.mealDetails, { color: palette.textMuted }]}>
-                                  🔥 {dayMeals.dinner.calories} cal
-                                </Text>
-                                <Text style={[styles.mealDetails, { color: palette.textMuted }]}>
-                                  ⚖️ {dayMeals.dinner.grams}g
-                                </Text>
-                              </View>
-
-                              {/* Snack */}
-                              <View style={styles.mealItem}>
-                                <View style={styles.mealHeader}>
-                                  <Text style={[styles.mealName, { color: palette.textPrimary }]}>
-                                    🍎 Snack
-                                  </Text>
-                                  <Checkbox
-                                    status={dayMeals.consumed.snack ? 'checked' : 'unchecked'}
-                                    onPress={() => handleMarkMealCompleted(date, 'snack')}
-                                    color={palette.accent}
-                                  />
-                                </View>
-                                <Text style={[styles.mealDetails, { color: palette.textPrimary }]}>
-                                  {dayMeals.snack.name}
-                                </Text>
-                                <Text style={[styles.mealDetails, { color: palette.textMuted }]}>
-                                  🔥 {dayMeals.snack.calories} cal
-                                </Text>
-                                <Text style={[styles.mealDetails, { color: palette.textMuted }]}>
-                                  ⚖️ {dayMeals.snack.grams}g
-                                </Text>
-                              </View>
-                            </View>
-                          )}
-                        </Card.Content>
-                      </Card>
-                    );
-                  })}
+                  <MaterialCommunityIcons 
+                    name={showPortionGuide ? "chevron-up" : "chevron-down"} 
+                    size={20} 
+                    color={palette.textSecondary} 
+                  />
+                </View>
+              </TouchableOpacity>
+              
+              {showPortionGuide && (
+                <View style={styles.portionContent}>
+                  <View style={styles.portionRow}>
+                    <Text style={[styles.portionLabel, { color: palette.textSecondary }]}>Chapati</Text>
+                    <Text style={[styles.portionValue, { color: palette.textPrimary }]}>{portionGuidelines.chapati} (30g flour each)</Text>
+                  </View>
+                  <View style={styles.portionRow}>
+                    <Text style={[styles.portionLabel, { color: palette.textSecondary }]}>Rice (cooked)</Text>
+                    <Text style={[styles.portionValue, { color: palette.textPrimary }]}>{portionGuidelines.rice}</Text>
+                  </View>
+                  <View style={styles.portionRow}>
+                    <Text style={[styles.portionLabel, { color: palette.textSecondary }]}>Dal/Curry</Text>
+                    <Text style={[styles.portionValue, { color: palette.textPrimary }]}>{portionGuidelines.dal}</Text>
+                  </View>
+                  <View style={styles.portionRow}>
+                    <Text style={[styles.portionLabel, { color: palette.textSecondary }]}>Milk</Text>
+                    <Text style={[styles.portionValue, { color: palette.textPrimary }]}>{portionGuidelines.milk}</Text>
+                  </View>
+                  <View style={styles.portionRow}>
+                    <Text style={[styles.portionLabel, { color: palette.textSecondary }]}>Paneer (when served)</Text>
+                    <Text style={[styles.portionValue, { color: palette.textPrimary }]}>{portionGuidelines.paneer}g</Text>
+                  </View>
+                  <View style={styles.portionRow}>
+                    <Text style={[styles.portionLabel, { color: palette.textSecondary }]}>Chicken (when served)</Text>
+                    <Text style={[styles.portionValue, { color: palette.textPrimary }]}>{portionGuidelines.chicken}g</Text>
+                  </View>
+                  <View style={styles.portionRow}>
+                    <Text style={[styles.portionLabel, { color: palette.textSecondary }]}>Legumes (Rajma/Chole)</Text>
+                    <Text style={[styles.portionValue, { color: palette.textPrimary }]}>{portionGuidelines.legumes}</Text>
+                  </View>
                 </View>
               )}
-            </Card.Content>
-          </Card>
+            </Card>
+          )}
+
+          {/* Quick Stats */}
+          {selectedStudent && (
+            <View style={[styles.statsCard, { backgroundColor: palette.surface, borderColor: mealColors.primary }]}>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <MaterialCommunityIcons name="account" size={24} color={mealColors.primary} />
+                  <Text style={[styles.statValue, { color: palette.textPrimary }]}>{selectedStudent.name}</Text>
+                  <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Age {selectedStudent.age}</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <MaterialCommunityIcons name="fire" size={24} color={mealColors.primary} />
+                  <Text style={[styles.statValue, { color: palette.textPrimary }]}>{selectedStudent.dailyCalorieNeeds}</Text>
+                  <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Daily Target</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <MaterialCommunityIcons name="scale-bathroom" size={24} color={mealColors.primary} />
+                  <Text style={[styles.statValue, { color: palette.textPrimary }]}>{selectedStudent.bmi.toFixed(1)}</Text>
+                  <Text style={[styles.statLabel, { color: palette.textSecondary }]}>BMI</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Today's Progress */}
+          {todayProgress && (
+            <View style={[styles.progressCard, { backgroundColor: mealColors.surface }]}>
+              <View style={styles.progressHeader}>
+                <Text style={[styles.progressTitle, { color: mealColors.primaryDark }]}>Today's Progress</Text>
+                <Text style={[styles.progressPercent, { color: mealColors.primary }]}>
+                  {Math.round((todayProgress.completed / todayProgress.total) * 100)}%
+                </Text>
+              </View>
+              <ProgressBar 
+                progress={todayProgress.completed / todayProgress.total} 
+                color={mealColors.primary}
+                style={styles.progressBar}
+              />
+              <Text style={[styles.progressDetail, { color: palette.textSecondary }]}>
+                {todayProgress.completed} of {todayProgress.total} meals completed • {todayProgress.calories} calories
+              </Text>
+            </View>
+          )}
+
+          {/* Weekly Stats */}
+          {weeklyStats && (
+            <View style={[styles.statsGrid, { backgroundColor: palette.surface }]}>
+              <View style={styles.statBox}>
+                <MaterialCommunityIcons name="calendar-week" size={24} color={mealColors.primary} />
+                <Text style={[styles.statBoxValue, { color: palette.textPrimary }]}>{weeklyStats.avgCalories}</Text>
+                <Text style={[styles.statBoxLabel, { color: palette.textSecondary }]}>Avg Daily Cal</Text>
+              </View>
+              <View style={styles.statBox}>
+                <MaterialCommunityIcons name="check-all" size={24} color={mealColors.primary} />
+                <Text style={[styles.statBoxValue, { color: palette.textPrimary }]}>{weeklyStats.completedMeals}/{weeklyStats.totalMeals}</Text>
+                <Text style={[styles.statBoxLabel, { color: palette.textSecondary }]}>Meals Done</Text>
+              </View>
+              <View style={styles.statBox}>
+                <MaterialCommunityIcons name="chart-line" size={24} color={mealColors.primary} />
+                <Text style={[styles.statBoxValue, { color: palette.textPrimary }]}>{weeklyStats.progress}%</Text>
+                <Text style={[styles.statBoxLabel, { color: palette.textSecondary }]}>Weekly Progress</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Action Buttons */}
+          {selectedStudent && (
+            <View style={styles.section}>
+              <Button
+                mode="contained"
+                onPress={handleGenerateMealPlan}
+                style={[styles.actionButton, { backgroundColor: mealColors.primary }]}
+                labelStyle={styles.actionButtonLabel}
+                icon={({size, color}) => <MaterialCommunityIcons name="calendar-plus" size={size} color={color} />}
+                textColor="#ffffff">
+                Generate Weekly Plan
+              </Button>
+            </View>
+          )}
+
+          {/* Weekly Plan */}
+          {currentMealPlan && selectedStudent && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: palette.textSecondary }]}>
+                Weekly Plan for {selectedStudent.name}
+              </Text>
+              
+              <View style={styles.daysList}>
+                {currentMealPlan.weeklyMenu?.map((dayPlan: DailyMealPlan, index: number) => {
+                  // Calculate date for this day (starting from today)
+                  const dateObj = new Date(today);
+                  dateObj.setDate(today.getDate() + index);
+                  const dateStr = dateObj.toISOString().split('T')[0];
+                  
+                  const isToday = dayPlan.day === todayDayName;
+                  const isExpanded = expandedDay === dayPlan.day;
+                  const dayCompleted = currentMealPlan.completedMeals?.[dateStr] || {
+                    breakfast: false, lunch: false, dinner: false, snack: false
+                  };
+                  const completedCount = Object.values(dayCompleted).filter(Boolean).length;
+                  const dailyNutrition = calculateDailyNutrition(dayPlan);
+                  
+                  return (
+                    <View
+                      key={dayPlan.day}
+                      style={[
+                        styles.dayCard,
+                        { backgroundColor: palette.surface, borderColor: isToday ? mealColors.primary : palette.border },
+                        isToday && styles.dayCardToday,
+                      ]}>
+                      <TouchableOpacity
+                        style={styles.dayHeader}
+                        onPress={() => setExpandedDay(isExpanded ? null : dayPlan.day)}>
+                        <View style={styles.dayInfo}>
+                          <View style={[styles.dayIcon, { backgroundColor: isToday ? mealColors.primaryLight : 'transparent' }]}>
+                            <Text style={[styles.dayName, { color: isToday ? mealColors.primaryDark : palette.textPrimary }]}>
+                              {dayPlan.day.slice(0, 3)}
+                            </Text>
+                          </View>
+                          <View>
+                            <Text style={[styles.dayDate, { color: palette.textSecondary }]}>
+                              {dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </Text>
+                            {isToday && <Text style={[styles.todayBadge, { color: mealColors.primary }]}>Today</Text>}
+                            {dayPlan.specialNote && (
+                              <Text style={[styles.specialNote, { color: mealColors.primary }]}>{dayPlan.specialNote}</Text>
+                            )}
+                          </View>
+                        </View>
+                        <View style={styles.dayStats}>
+                          <View style={[styles.completionBadge, { backgroundColor: completedCount === 4 ? mealColors.primaryLight : palette.border }]}>
+                            <Text style={[styles.completionText, { color: completedCount === 4 ? mealColors.primaryDark : palette.textSecondary }]}>
+                              {completedCount}/4
+                            </Text>
+                          </View>
+                          <Text style={[styles.dayStat, { color: palette.textSecondary }]}>
+                            {dailyNutrition.totalCalories} cal
+                          </Text>
+                          <MaterialCommunityIcons 
+                            name={isExpanded ? "chevron-up" : "chevron-down"} 
+                            size={20} 
+                            color={palette.textSecondary} 
+                          />
+                        </View>
+                      </TouchableOpacity>
+                      
+                      {isExpanded && (
+                        <View style={styles.mealsContainer}>
+                          {([
+                            { key: 'breakfast', label: 'Breakfast', meal: dayPlan.breakfast, icon: 'coffee' },
+                            { key: 'lunch', label: 'Lunch', meal: dayPlan.lunch, icon: 'food' },
+                            { key: 'dinner', label: 'Dinner', meal: dayPlan.dinner, icon: 'food-variant' },
+                            { key: 'snack', label: 'Snack', meal: dayPlan.snack, icon: 'apple' },
+                          ] as const).map(({ key, label, meal, icon }) => (
+                            <View key={key} style={[styles.mealRow, { borderColor: palette.border }]}>
+                              <View style={styles.mealContent}>
+                                <View style={styles.mealHeader}>
+                                  <View style={styles.mealLabelRow}>
+                                    <MaterialCommunityIcons name={icon as any} size={18} color={mealColors.primary} />
+                                    <Text style={[styles.mealLabel, { color: mealColors.primary }]}>{label}</Text>
+                                  </View>
+                                  <Checkbox
+                                    status={dayCompleted[key] ? 'checked' : 'unchecked'}
+                                    onPress={() => handleMarkMealCompleted(dateStr, key)}
+                                    color={mealColors.primary}
+                                  />
+                                </View>
+                                
+                                {/* Dish Combination Name */}
+                                <Text style={[styles.mealName, { color: palette.textPrimary }]}>{meal.name}</Text>
+                                
+                                {/* Individual Items */}
+                                <View style={styles.itemsList}>
+                                  {meal.items.map((item, idx) => (
+                                    <View key={idx} style={styles.itemRow}>
+                                      <MaterialCommunityIcons name="circle-small" size={16} color={palette.textSecondary} />
+                                      <Text style={[styles.itemText, { color: palette.textSecondary }]}>{item}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                                
+                                {/* Nutrition & Tags */}
+                                <View style={styles.mealMetaRow}>
+                                  <Text style={[styles.mealMeta, { color: palette.textSecondary }]}>
+                                    {meal.calories} cal • {meal.protein}g protein
+                                  </Text>
+                                </View>
+                                <View style={styles.tagsRow}>
+                                  {meal.iron && (
+                                    <View style={[styles.tag, { backgroundColor: '#fee2e2' }]}>
+                                      <Text style={[styles.tagText, { color: '#dc2626' }]}>Iron</Text>
+                                    </View>
+                                  )}
+                                  {meal.calcium && (
+                                    <View style={[styles.tag, { backgroundColor: '#dbeafe' }]}>
+                                      <Text style={[styles.tagText, { color: '#2563eb' }]}>Calcium</Text>
+                                    </View>
+                                  )}
+                                  {meal.energyDense && (
+                                    <View style={[styles.tag, { backgroundColor: '#fef3c7' }]}>
+                                      <Text style={[styles.tagText, { color: '#d97706' }]}>Energy</Text>
+                                    </View>
+                                  )}
+                                </View>
+                              </View>
+                            </View>
+                          ))}
+                          
+                          <View style={[styles.daySummary, { backgroundColor: mealColors.surface }]}>
+                            <Text style={[styles.daySummaryText, { color: mealColors.primaryDark }]}>
+                              Daily Total: {dailyNutrition.totalCalories} calories • {dailyNutrition.totalProtein}g protein
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+          
+          {!selectedStudent && (
+            <View style={[styles.emptyCard, { backgroundColor: palette.surface }]}>
+              <MaterialCommunityIcons name="account-search" size={48} color={palette.textSecondary} />
+              <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
+                Select a student to view their meal plan
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -647,208 +540,320 @@ export default function MealsScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   flex: {
     flex: 1,
   },
   scroll: {
-    padding: 20,
+    padding: 16,
+    paddingBottom: 100,
   },
-  title: {
-    fontWeight: '600',
-    marginBottom: 24,
-    fontFamily: fonts.semibold,
-    fontSize: 24,
-  },
-  
-  // App header styles
-  appHeader: {
-    backgroundColor: 'white',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 16,
-    marginLeft: -20,
-    marginRight: -20,
-    marginTop: -20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#16a34a20',
   },
-  appHeaderText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#1f2937',
-    textAlign: 'left',
-    letterSpacing: -0.5,
-    textTransform: 'uppercase',
+  headerIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#dcfce7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
     fontFamily: fonts.bold,
   },
-
-  // Card styles
-  card: {
-    marginBottom: 20,
-    borderRadius: 20,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  cardContent: {
-    padding: 0,
-  },
-  ageGroupCard: {
-    marginBottom: 16,
-    borderRadius: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-
-  // Form styles
-  input: {
-    marginBottom: 8,
+  headerSubtitle: {
+    fontSize: 14,
     fontFamily: fonts.regular,
   },
-  row: {
+  messageBanner: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  halfWidth: {
-    flex: 1,
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#dc2626',
-    marginTop: 4,
-    fontFamily: fonts.regular,
-  },
-  addChildButton: {
-    padding: 16,
-    borderRadius: 12,
     alignItems: 'center',
-    marginTop: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  addChildText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: fonts.semibold,
-  },
-
-  // Student selection styles
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-    fontFamily: fonts.semibold,
-  },
-  studentOption: {
     padding: 12,
     borderRadius: 8,
-    marginBottom: 8,
-    flexDirection: 'column',
-    alignItems: 'flex-start',
+    marginBottom: 16,
+    gap: 8,
   },
-  studentOptionHeader: {
+  messageText: {
+    fontSize: 14,
+    fontFamily: fonts.medium,
+    flex: 1,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  portionCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 16,
+  },
+  portionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  portionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+    flex: 1,
+  },
+  portionContent: {
+    marginTop: 16,
+    gap: 8,
+  },
+  portionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    width: '100%',
-    marginBottom: 4,
   },
-  studentOptionDetails: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  studentOptionText: {
-    fontSize: 14,
-    fontWeight: '500',
+  portionLabel: {
+    fontSize: 13,
     fontFamily: fonts.medium,
   },
-  studentOptionDetailText: {
-    fontSize: 12,
-    fontFamily: fonts.regular,
-  },
-  selectedText: {
-    fontSize: 12,
+  portionValue: {
+    fontSize: 13,
     fontWeight: '600',
     fontFamily: fonts.semibold,
   },
-
-  // Meal plan styles
-  errorCard: {
-    marginBottom: 16,
+  statsCard: {
     borderRadius: 12,
+    borderWidth: 2,
     padding: 16,
+    marginBottom: 16,
   },
-  emptyStateCard: {
-    borderRadius: 12,
-    padding: 32,
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     alignItems: 'center',
   },
-  emptyStateText: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-    fontFamily: fonts.regular,
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
   },
-  recommendationsContainer: {
-    marginTop: 16,
+  statValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+    marginTop: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#e2e8f0',
+  },
+  progressCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#16a34a20',
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+  },
+  progressPercent: {
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: fonts.bold,
+  },
+  progressBar: {
+    height: 8,
+    borderRadius: 4,
+  },
+  progressDetail: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    marginTop: 8,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  statBox: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statBoxValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: fonts.bold,
+    marginTop: 8,
+  },
+  statBoxLabel: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    marginTop: 4,
+  },
+  emptyCard: {
+    alignItems: 'center',
+    padding: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  emptyText: {
+    fontSize: 15,
+    fontFamily: fonts.regular,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  studentList: {
+    gap: 10,
+  },
+  studentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  studentItemSelected: {
+    borderWidth: 2,
+  },
+  studentIcon: {
+    marginRight: 12,
+  },
+  studentInfo: {
+    flex: 1,
+  },
+  studentName: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+  },
+  studentMeta: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    marginTop: 2,
+  },
+  actionButton: {
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  actionButtonLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+    paddingVertical: 4,
+  },
+  daysList: {
+    gap: 10,
   },
   dayCard: {
-    marginBottom: 16,
     borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  dayCardToday: {
+    borderWidth: 2,
   },
   dayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    padding: 14,
   },
-  dayTitle: {
-    fontSize: 14,
+  dayInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dayIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayName: {
+    fontSize: 15,
     fontWeight: '600',
     fontFamily: fonts.semibold,
   },
   dayDate: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: fonts.regular,
+  },
+  todayBadge: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+  },
+  specialNote: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
     marginTop: 2,
   },
   dayStats: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
+  },
+  completionBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  completionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
   },
   dayStat: {
-    fontSize: 12,
-    fontFamily: fonts.regular,
+    fontSize: 13,
+    fontFamily: fonts.medium,
   },
-  mealsList: {
-    marginTop: 16,
-    gap: 12,
+  mealsContainer: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
   },
-  mealItem: {
-    padding: 12,
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#10b981',
+  mealRow: {
+    borderTopWidth: 1,
+    paddingTop: 12,
+    marginTop: 12,
+  },
+  mealContent: {
+    flex: 1,
   },
   mealHeader: {
     flexDirection: 'row',
@@ -856,16 +861,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
+  mealLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mealLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   mealName: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+    marginBottom: 6,
+  },
+  itemsList: {
+    marginLeft: 4,
+    marginBottom: 8,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  itemText: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    flex: 1,
+  },
+  mealMetaRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  mealMeta: {
+    fontSize: 13,
+    fontFamily: fonts.medium,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  tag: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  tagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+  },
+  daySummary: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+  },
+  daySummaryText: {
     fontSize: 14,
     fontWeight: '600',
-    fontFamily: fonts.medium,
-    flex: 1,
-    marginRight: 8,
-    maxWidth: '80%',
-  },
-  mealDetails: {
-    fontSize: 12,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.semibold,
+    textAlign: 'center',
   },
 });

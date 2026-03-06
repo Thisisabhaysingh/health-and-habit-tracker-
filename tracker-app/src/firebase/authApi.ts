@@ -33,14 +33,18 @@ export const signUpWithProfile = async ({
   screenTimeLimitMin,
 }: SignUpPayload) => {
   try {
-    console.log('Starting signup with:', { email, name });
+    console.log('Starting signup with:', { email, name, heightCm, weightKg, age });
     console.log('Firebase config check - auth available:', !!auth);
+    console.log('Height type:', typeof heightCm, 'Value:', heightCm);
+    console.log('Weight type:', typeof weightKg, 'Value:', weightKg);
     
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     console.log('User created successfully:', credential.user.uid);
     
     const bmi = bmiFromMetric(heightCm, weightKg);
     const category = bmiCategory(bmi);
+    
+    console.log('Calculated BMI:', bmi, 'Category:', category);
     
     // Calculate BMI goals
     const targetBMI = getBMIGoal(bmi, category);
@@ -56,12 +60,12 @@ export const signUpWithProfile = async ({
       email,
       name,
       age,
-      heightCm,
-      weightKg,
+      heightCm: Number(heightCm),
+      weightKg: Number(weightKg),
       bmi,
       bmiCategory: category,
       calorieTarget: recommendedCalories,
-      screenTimeLimitMin,
+      screenTimeLimitMin: Number(screenTimeLimitMin),
       createdAt: new Date().toISOString(),
       // BMI Goal Tracking
       targetBMI,
@@ -70,19 +74,35 @@ export const signUpWithProfile = async ({
       targetDate,
     };
     
-    console.log('Saving profile to database...');
-    console.log('Profile data to save:', profile);
+    console.log('Profile object to save:', JSON.stringify(profile, null, 2));
+    console.log('Saving profile to database at path:', `users/${credential.user.uid}`);
+    
     await set(ref(db, `users/${credential.user.uid}`), profile);
     console.log('Profile saved successfully');
     
     // Verify the save
     const verifySnap = await get(ref(db, `users/${credential.user.uid}`));
-    console.log('Verification - saved data:', verifySnap.val());
+    const savedData = verifySnap.val();
+    console.log('Verification - saved data:', JSON.stringify(savedData, null, 2));
+    console.log('Height in saved data:', savedData?.heightCm);
+    console.log('Weight in saved data:', savedData?.weightKg);
     
     return profile;
-  } catch (error) {
-    console.error('Signup error:', (error as any).code, (error as any).message);
-    throw error;
+  } catch (error: any) {
+    console.error('Signup error:', error.code, error.message);
+    
+    // Provide user-friendly error messages
+    if (error.code === 'auth/email-already-in-use') {
+      throw new Error('An account with this email already exists. Please sign in instead.');
+    } else if (error.code === 'auth/invalid-email') {
+      throw new Error('Please enter a valid email address.');
+    } else if (error.code === 'auth/weak-password') {
+      throw new Error('Password is too weak. Please use at least 6 characters.');
+    } else if (error.code === 'auth/network-request-failed') {
+      throw new Error('Network error. Please check your internet connection.');
+    } else {
+      throw new Error(error.message || 'Sign up failed. Please try again.');
+    }
   }
 };
 

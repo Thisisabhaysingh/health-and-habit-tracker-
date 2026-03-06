@@ -66,3 +66,44 @@ export const calculateRecommendedCalories = (heightCm: number, weightKg: number,
 
   return recommendedCalories;
 };
+
+// BMI Goal Calculation Functions
+export const getBMIGoal = (currentBMI: number, category: string): number => {
+  // Target a healthy BMI range (18.5 - 24.9)
+  if (category === 'Underweight') {
+    return 21; // Target middle of normal range
+  } else if (category === 'Overweight' || category === 'Obese') {
+    return 23; // Target upper-normal for weight loss
+  }
+  return currentBMI; // Already normal, maintain
+};
+
+export const getWeeklyGoal = (currentBMI: number, targetBMI: number): number => {
+  // Safe weight loss/gain rate: 0.5-1kg per week
+  if (targetBMI > currentBMI) {
+    return 0.5; // Gain weight
+  } else if (targetBMI < currentBMI) {
+    return -0.5; // Lose weight
+  }
+  return 0; // Maintain
+};
+
+export const calculateTargetWeight = (heightCm: number, targetBMI: number): number => {
+  const meters = heightCm / 100;
+  return Number((targetBMI * meters * meters).toFixed(1));
+};
+
+export const estimateTargetDate = (
+  currentWeightKg: number,
+  targetWeightKg: number,
+  weeklyGoalKg: number
+): string => {
+  if (weeklyGoalKg === 0 || currentWeightKg === targetWeightKg) {
+    return new Date().toISOString();
+  }
+  const weightDiff = Math.abs(targetWeightKg - currentWeightKg);
+  const weeksNeeded = Math.ceil(weightDiff / Math.abs(weeklyGoalKg));
+  const targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() + weeksNeeded * 7);
+  return targetDate.toISOString();
+};

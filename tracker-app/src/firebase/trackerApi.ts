@@ -238,7 +238,7 @@ export const subscribeToExercisePlans = (uid: string, callback: (exercisePlans: 
       });
     }
     callback(exercisePlans);
-  });
+  }, { onlyOnce: false });
 };
 
 export const subscribeToCurrentExercisePlan = (uid: string, studentId: string, callback: (exercisePlan: ExercisePlan | null) => void) => {

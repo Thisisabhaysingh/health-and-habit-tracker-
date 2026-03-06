@@ -2,6 +2,8 @@ export type PortionUnit = 'g' | 'ml' | 'serving' | 'plate' | 'piece' | 'bowl' | 
 
 export type BmiCategory = 'Underweight' | 'Normal' | 'Overweight' | 'Obese';
 
+export type Region = 'kolkata' | 'delhi';
+
 export interface Student {
   id: string;
   name: string;
@@ -12,6 +14,7 @@ export interface Student {
   bmiCategory: string;
   dailyCalorieNeeds: number;
   dietType: string;
+  region: Region; // Region for meal plan
   createdAt: string;
 }
 
@@ -22,11 +25,35 @@ export interface MealWithGrams {
   grams: number;
 }
 
+export interface DishCombination {
+  id: string;
+  name: string;
+  items: string[];
+  calories: number;
+  protein: number;
+  iron: boolean;
+  calcium: boolean;
+  energyDense: boolean;
+}
+
+export interface DailyMealPlan {
+  day: string;
+  breakfast: DishCombination;
+  lunch: DishCombination;
+  snack: DishCombination;
+  dinner: DishCombination;
+  specialNote?: string;
+}
+
 export interface MealPlan {
   id: string;
   studentId: string;
-  weekStartDate: string;
-  meals: {
+  studentName?: string;
+  age?: number;
+  weekStartDate?: string;
+  createdAt: string;
+  // Old format
+  meals?: {
     [date: string]: {
       breakfast: MealWithGrams;
       lunch: MealWithGrams;
@@ -42,7 +69,26 @@ export interface MealPlan {
       };
     };
   };
-  createdAt: string;
+  // New Shelter Home format
+  weeklyMenu?: DailyMealPlan[];
+  completedMeals?: {
+    [date: string]: {
+      breakfast: boolean;
+      lunch: boolean;
+      dinner: boolean;
+      snack: boolean;
+    };
+  };
+  portionGuidelines?: {
+    ageRange: string;
+    chapati: number;
+    rice: string;
+    dal: string;
+    milk: string;
+    paneer: number;
+    chicken: number;
+    legumes: string;
+  };
 }
 
 export interface MealEntry {
@@ -94,16 +140,31 @@ export interface ExercisePlan {
   weekStartDate: string;
   exercises: {
     [date: string]: {
-      mobility: ExerciseWithDetails;
-      strength: ExerciseWithDetails;
-      cardio: ExerciseWithDetails;
-      totalCalories: number;
-      totalDuration: number;
-      completed: {
+      // New Shelter Home format (array of exercises)
+      exercises?: Array<{
+        id: string;
+        name: string;
+        category: string;
+        duration: number;
+        calories: number;
+        reps?: string;
+        instructions: string[];
+        completed?: boolean;
+      }>;
+      title?: string;
+      focus?: string;
+      day?: string;
+      // Old format properties
+      mobility?: ExerciseWithDetails;
+      strength?: ExerciseWithDetails;
+      cardio?: ExerciseWithDetails;
+      totalCalories?: number;
+      totalDuration?: number;
+      completed?: {
         mobility: boolean;
         strength: boolean;
         cardio: boolean;
-      };
+      } | boolean;
     };
   };
   createdAt: string;
@@ -123,6 +184,7 @@ export interface TrackerState {
   currentMealPlan: MealPlan | null;
   currentExercisePlan: ExercisePlan | null;
   mealPlans: MealPlan[]; // Array to store meal plans for multiple children
+  exercisePlans: ExercisePlan[]; // Array to store exercise plans for multiple children
 }
 
 export interface AuthUser {
@@ -143,4 +205,9 @@ export interface UserProfile {
   calorieTarget: number;
   screenTimeLimitMin: number;
   createdAt: string;
+  // BMI Goal Tracking
+  targetBMI: number;
+  targetWeight: number;
+  weeklyGoal: number;
+  targetDate: string;
 }

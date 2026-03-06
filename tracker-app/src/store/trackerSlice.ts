@@ -10,6 +10,7 @@ const initialState: TrackerState = {
   currentMealPlan: null,
   currentExercisePlan: null,
   mealPlans: [], // Array to store meal plans for multiple children
+  exercisePlans: [], // Array to store exercise plans for multiple children
 };
 
 const trackerSlice = createSlice({
@@ -101,13 +102,13 @@ const trackerSlice = createSlice({
       }
     },
     updateMealConsumption(state, action: PayloadAction<{ date: string; mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' }>) {
-      if (state.currentMealPlan && state.currentMealPlan.meals[action.payload.date]) {
+      if (state.currentMealPlan?.meals?.[action.payload.date]) {
         state.currentMealPlan.meals[action.payload.date].consumed[action.payload.mealType] = true;
       }
       // Also update in mealPlans array
       const planIndex = state.mealPlans.findIndex(plan => plan.id === state.currentMealPlan?.id);
-      if (planIndex !== -1 && state.mealPlans[planIndex].meals[action.payload.date]) {
-        state.mealPlans[planIndex].meals[action.payload.date].consumed[action.payload.mealType] = true;
+      if (planIndex !== -1 && state.mealPlans[planIndex].meals?.[action.payload.date]) {
+        state.mealPlans[planIndex].meals![action.payload.date].consumed[action.payload.mealType] = true;
       }
     },
     setMealPlans(state, action: PayloadAction<MealPlan[]>) {
@@ -123,15 +124,62 @@ const trackerSlice = createSlice({
     setCurrentExercisePlan(state, action: PayloadAction<ExercisePlan | null>) {
       state.currentExercisePlan = action.payload;
     },
+    setExercisePlans(state, action: PayloadAction<ExercisePlan[]>) {
+      state.exercisePlans = action.payload;
+    },
+    addExercisePlan: (state, action: PayloadAction<ExercisePlan>) => {
+      // Remove existing plan for same student if exists
+      state.exercisePlans = state.exercisePlans.filter(plan => plan.studentId !== action.payload.studentId);
+      // Add new plan
+      state.exercisePlans.push(action.payload);
+    },
     updateExercisePlan(state, action: PayloadAction<ExercisePlan>) {
       if (state.currentExercisePlan && state.currentExercisePlan.id === action.payload.id) {
         state.currentExercisePlan = action.payload;
       }
-    },
-    updateExerciseConsumption(state, action: PayloadAction<{ date: string; exerciseType: 'mobility' | 'strength' | 'cardio' }>) {
-      if (state.currentExercisePlan && state.currentExercisePlan.exercises[action.payload.date]) {
-        state.currentExercisePlan.exercises[action.payload.date].completed[action.payload.exerciseType] = true;
+      // Also update in exercisePlans array
+      const planIndex = state.exercisePlans.findIndex(plan => plan.id === action.payload.id);
+      if (planIndex !== -1) {
+        state.exercisePlans[planIndex] = action.payload;
       }
+    },
+    updateExerciseConsumption(state, action: PayloadAction<{ date: string; exerciseId: string; completed: boolean }>) {
+      const { date, exerciseId, completed } = action.payload;
+      
+      // Update currentExercisePlan
+      if (state.currentExercisePlan && state.currentExercisePlan.exercises[date]) {
+        const dayPlan = state.currentExercisePlan.exercises[date] as any;
+        // Handle new array structure
+        if (dayPlan.exercises && Array.isArray(dayPlan.exercises)) {
+          const exercise = dayPlan.exercises.find((ex: any) => ex.id === exerciseId);
+          if (exercise) {
+            exercise.completed = completed;
+          }
+          // Check if all exercises completed
+          const allCompleted = dayPlan.exercises.every((ex: any) => ex.completed);
+          dayPlan.completed = allCompleted;
+        } else {
+          // Fallback for old structure (backward compatibility)
+          dayPlan.completed = { ...dayPlan.completed, [exerciseId]: completed };
+        }
+      }
+      
+      // Also update in exercisePlans array
+      state.exercisePlans.forEach(plan => {
+        if (plan.exercises && plan.exercises[date]) {
+          const dayPlan = plan.exercises[date] as any;
+          if (dayPlan.exercises && Array.isArray(dayPlan.exercises)) {
+            const exercise = dayPlan.exercises.find((ex: any) => ex.id === exerciseId);
+            if (exercise) {
+              exercise.completed = completed;
+            }
+            const allCompleted = dayPlan.exercises.every((ex: any) => ex.completed);
+            dayPlan.completed = allCompleted;
+          } else {
+            dayPlan.completed = { ...dayPlan.completed, [exerciseId]: completed };
+          }
+        }
+      });
     },
     resetTrackerState: () => ({
       ...initialState,
@@ -160,6 +208,8 @@ export const {
   setMealPlans,
   addMealPlan,
   setCurrentExercisePlan,
+  setExercisePlans,
+  addExercisePlan,
   updateExercisePlan,
   updateExerciseConsumption,
   resetTrackerState,
